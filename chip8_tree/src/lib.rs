@@ -4,6 +4,7 @@ mod static_tree;
 mod utils;
 
 use chip8_core::Chip8Cpu;
+pub use nodes::{compile_maze, CompiledExpr, ExecutionContext, Sprite};
 pub use static_tree::StaticSimulator;
 
 /// Node in interpreter tree.

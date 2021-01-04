@@ -157,3 +157,184 @@ impl SimNode for DrwNode {
         cpu.pc += 2;
     }
 }
+
+// =====================================================================================================================
+
+pub type Sprite = [u8; 4];
+
+pub struct ExecutionContext {
+    registers: [u8; 16],
+    data: [Sprite; 2],
+    display: [bool; SCREEN_BUF_COUNT],
+}
+
+impl ExecutionContext {
+    pub fn new() -> Self {
+        Self {
+            registers: [0; 16],
+            data: [[0; 4]; 2],
+            display: [false; SCREEN_BUF_COUNT],
+        }
+    }
+
+    pub fn dump_display(&self) -> Result<String, std::fmt::Error> {
+        use std::fmt::Write as FmtWrite;
+
+        let mut buf = String::new();
+
+        for y in 0..SCREEN_HEIGHT {
+            for x in 0..SCREEN_WIDTH {
+                if self.display[x + y * SCREEN_WIDTH] {
+                    write!(buf, "#")?;
+                } else {
+                    write!(buf, ".")?;
+                }
+            }
+            write!(buf, "\n")?;
+        }
+
+        Ok(buf)
+    }
+}
+
+pub struct CompiledExpr<'s>(Box<dyn 's + Fn(&mut ExecutionContext)>);
+
+impl<'s> CompiledExpr<'s> {
+    pub fn new(closure: impl 's + Fn(&mut ExecutionContext)) -> Self {
+        CompiledExpr(Box::new(closure))
+    }
+
+    pub fn execute(&self, ctx: &mut ExecutionContext) {
+        self.0(ctx)
+    }
+}
+
+///
+/// ```python
+/// sprite1 = ...
+/// sprite2 = ...
+/// for y in range(32):
+///     for x in range(64):
+///         if random(1) == 1:
+///             draw(sprite1)
+///         else:
+///             draw(sprite2)
+/// ```
+pub fn compile_maze<'s>() -> CompiledExpr<'s> {
+    // Register labels to make it clear that these values can be determined during AST->Sim compilation.
+    const V0: usize = 0;
+    const V1: usize = 1;
+    const V2: usize = 2;
+    const V3: usize = 3;
+
+    // These sprites are data in the maze program's bytecode.
+    //
+    // In a hypothetical language compiled to an AST, they could be
+    // literals of some kind. The arrays or vectors would be created
+    // by the AST->Sim compilation and passed to the closures.
+    const SPRITE1: Sprite = [0b10000000, 0b01000000, 0b00100000, 0b00010000];
+    const SPRITE2: Sprite = [0b00100000, 0b01000000, 0b10000000, 0b00010000];
+
+    let draw = CompiledExpr::new(move |ctx| {
+        let (x, y) = (
+            ctx.registers[V0 as usize] as usize,
+            ctx.registers[V1 as usize] as usize,
+        );
+        // Argument passing in a real implementation would have to be far more flexible.
+        let sprite = ctx.data[ctx.registers[V3] as usize];
+        let mut is_erased = false;
+
+        // Iteration from pointer in address register I to number of rows specified by opcode value N.
+        for (r, row) in sprite.iter().enumerate() {
+            // Each row is 8 bits representing the 8 pixels of the sprite.
+            for c in 0..8 {
+                let d = ((x + c) % SCREEN_WIDTH) + ((y + r) % SCREEN_HEIGHT) * SCREEN_WIDTH;
+
+                let old_px = ctx.display[d];
+                let new_px = old_px ^ ((row >> (7 - c) & 0x1) == 1);
+
+                // XOR erases a pixel when both the old and new values are both 1.
+                is_erased |= old_px && new_px;
+
+                // Write to display buffer
+                ctx.display[d] = new_px;
+            }
+        }
+
+        // If a pixel was erased, then a collision occurred.
+        ctx.registers[0xF] = is_erased as u8;
+    });
+
+    let rnd = CompiledExpr::new(move |ctx| {
+        // The 1 in this expression would come from an integer literal in the AST.
+        ctx.registers[V2] = 1 & thread_rng().gen::<u8>();
+    });
+
+    let cond = CompiledExpr::new(move |ctx| {
+        rnd.execute(ctx);
+
+        // The 1 in this expression would come from an integer literal in the AST.
+        if ctx.registers[V2] == 1 {
+            // Argument passing in a real implementation would have to be far more flexible.
+            ctx.registers[V3] = 0;
+            draw.execute(ctx);
+        } else {
+            ctx.registers[V3] = 1;
+            draw.execute(ctx);
+        }
+    });
+
+    let x_loop = CompiledExpr::new(move |ctx| {
+        for x in (0..64).step_by(4) {
+            // Loop binds a variable to the local scope.
+            //
+            // Available to expression within the scope.
+            ctx.registers[V0] = x;
+            cond.execute(ctx);
+        }
+    });
+
+    let y_loop = CompiledExpr::new(move |ctx| {
+        for y in (0..32).step_by(4) {
+            // Loop binds a variable to the local scope.
+            //
+            // Available to expression within the scope.
+            ctx.registers[V1] = y;
+            x_loop.execute(ctx);
+        }
+    });
+
+    let set_data = CompiledExpr::new(move |ctx| {
+        ctx.data[0] = SPRITE1;
+        ctx.data[1] = SPRITE2;
+    });
+
+    let root = CompiledExpr::new(move |ctx| {
+        set_data.execute(ctx);
+        y_loop.execute(ctx);
+    });
+
+    root
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn test_sim() {
+        let mut ctx = ExecutionContext::new();
+        let root = compile_maze();
+
+        let start = Instant::now();
+        root.execute(&mut ctx);
+        let end = Instant::now();
+
+        println!(
+            "time taken: {}ms",
+            end.duration_since(start).as_nanos() as f64 / 1000000.0
+        ); // to millis
+        println!("{}", ctx.dump_display().unwrap());
+    }
+}
