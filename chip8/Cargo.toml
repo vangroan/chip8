@@ -10,5 +10,12 @@ edition = "2018"
 chip8_core = { version = "*", path = "../chip8_core" }
 chip8_bytecode = { version = "*", path = "../chip8_bytecode" }
 
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "maze"
+harness = false
+
 [features]
 op_trace = ["chip8_bytecode/op_trace"]

@@ -129,6 +129,7 @@ impl Interpreter for BytecodeInterpreter {
                     cpu.registers[0xF] = is_erased as u8;
                     cpu.pc += 2;
                 }
+
                 _ => {
                     panic!("Unsupported opcode {:02X} at address {:04X}", code, cpu.pc)
                     // return;
