@@ -1,5 +1,5 @@
 [package]
-name = "chip8"
+name = "chip8_tree"
 version = "0.1.0"
 authors = ["Willem Victor <wimpievictor@gmail.com>"]
 edition = "2018"
@@ -8,15 +8,4 @@ edition = "2018"
 
 [dependencies]
 chip8_core = { version = "*", path = "../chip8_core" }
-chip8_bytecode = { version = "*", path = "../chip8_bytecode" }
-chip8_tree = { version = "*", path = "../chip8_tree" }
-
-[dev-dependencies]
-criterion = "0.3"
-
-[[bench]]
-name = "maze"
-harness = false
-
-[features]
-op_trace = ["chip8_bytecode/op_trace"]
+rand = "0.8"

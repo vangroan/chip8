@@ -1,5 +1,5 @@
 /// Convenience helpers for extracting data from opcodes.
-use chip8_core::Chip8Cpu;
+use crate::Chip8Cpu;
 
 /// Extract opcode from the current program pointer.
 #[inline(always)]

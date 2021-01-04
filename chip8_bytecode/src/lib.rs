@@ -1,8 +1,9 @@
-mod utils;
-
+//! Bytecode interpreter.
+use crate::utils::*;
 use chip8_core::{prelude::*, Address, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rand::prelude::*;
-use utils::*;
+
+pub mod utils;
 
 pub struct BytecodeInterpreter;
 
