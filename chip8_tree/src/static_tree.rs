@@ -67,7 +67,7 @@ impl Interpreter for StaticSimulator {
         self.compile(cpu);
     }
 
-    fn execute(&self, cpu: &mut Chip8Cpu) {
+    fn execute(&self, _cpu: &mut Chip8Cpu) {
         todo!("Execute simulator")
     }
 }

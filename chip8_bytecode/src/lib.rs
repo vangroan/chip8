@@ -35,6 +35,14 @@ impl Interpreter for BytecodeInterpreter {
                     }
                     cpu.pc += 2;
                 }
+                0x00EE => {
+                    // 00EE
+                    // Return from a subroutine.
+                    // Set the program counter to the value at the top of the stack.
+                    // Subtract 1 from the stack pointer.
+                    cpu.pc = cpu.stack[cpu.sp] as usize;
+                    cpu.sp -= 1;
+                }
                 0x1 => {
                     // 1NNN
                     // Jump to address.
@@ -43,6 +51,13 @@ impl Interpreter for BytecodeInterpreter {
                     let address: Address = op_nnn(cpu);
                     cpu.pc = address as usize;
                 }
+                0x2 => {
+                    // 2NNN
+                    // Call subroutine at NNN.
+                    cpu.sp += 1;
+                    cpu.stack[cpu.sp] = cpu.pc as u16;
+                    cpu.pc = op_nnn(cpu) as usize;
+                }
                 0x3 => {
                     // 3XNN
                     // Skip the next instruction if register VX equals value NN.
@@ -50,6 +65,30 @@ impl Interpreter for BytecodeInterpreter {
 
                     let (vx, nn) = op_xnn(cpu);
                     if cpu.registers[vx as usize] == nn {
+                        cpu.pc += 4;
+                    } else {
+                        cpu.pc += 2;
+                    }
+                }
+                0x4 => {
+                    // 4XNN
+                    // Skip the next instruction if register VX does not equal value NN.
+                    op_trace_xnn("SNE", cpu);
+
+                    let (vx, nn) = op_xnn(cpu);
+                    if cpu.registers[vx as usize] != nn {
+                        cpu.pc += 4;
+                    } else {
+                        cpu.pc += 2;
+                    }
+                }
+                0x5 => {
+                    // 5XY0
+                    // Skip the next instruction if register VX equals value VY.
+                    op_trace_xy("SE", cpu);
+
+                    let (vx, vy) = op_xy(cpu);
+                    if cpu.registers[vx as usize] == cpu.registers[vy as usize] {
                         cpu.pc += 4;
                     } else {
                         cpu.pc += 2;
@@ -73,6 +112,82 @@ impl Interpreter for BytecodeInterpreter {
                     cpu.registers[vx as usize] += nn;
                     cpu.pc += 2;
                 }
+                0x8 => match op_n(cpu) {
+                    0x0 => {
+                        // 8XY0
+                        // Store the value of register VY in register VX.
+                        op_trace_xy_op("LD", cpu);
+
+                        let (vx, vy) = op_xy(cpu);
+                        cpu.registers[vx as usize] = cpu.registers[vy as usize];
+                        cpu.pc += 2;
+                    }
+                    0x1 => {
+                        // 8XY1
+                        // Performs bitwise OR on VX and VY, and stores the result in VX.
+                        op_trace_xy_op("OR", cpu);
+
+                        let (vx, vy) = op_xy(cpu);
+                        cpu.registers[vx as usize] =
+                            cpu.registers[vx as usize] | cpu.registers[vy as usize];
+                        cpu.pc += 2;
+                    }
+                    0x2 => {
+                        // 8XY2
+                        // Performs bitwise AND on VX and VY, and stores the result in VX.
+                        op_trace_xy_op("AND", cpu);
+
+                        let (vx, vy) = op_xy(cpu);
+                        cpu.registers[vx as usize] =
+                            cpu.registers[vx as usize] & cpu.registers[vy as usize];
+                        cpu.pc += 2;
+                    }
+                    0x3 => {
+                        // 8XY3
+                        // Performs bitwise XOR on VX and VY, and stores the result in VX.
+                        op_trace_xy_op("XOR", cpu);
+
+                        let (vx, vy) = op_xy(cpu);
+                        cpu.registers[vx as usize] =
+                            cpu.registers[vx as usize] ^ cpu.registers[vy as usize];
+                        cpu.pc += 2;
+                    }
+                    0x4 => {
+                        // 8XY4
+                        // ADDs VX to VY, and stores the result in VX.
+                        // Overflow is wrapped.
+                        // If overflow, set VF to 1, else 0.
+                        op_trace_xy_op("ADD", cpu);
+
+                        let (vx, vy) = op_xy(cpu);
+                        let (x, y) = (cpu.registers[vx as usize], cpu.registers[vy as usize]);
+                        let result = x as usize + y as usize;
+                        cpu.registers[vx as usize] = (result & 0xF) as u8; // Overflow wrap
+                        cpu.registers[0xF] = if result > 0x255 { 1 } else { 0 };
+                        cpu.pc += 2;
+                    }
+                    0x5 => {
+                        // 8XY5
+                        // Subtracts VY from VX, and stores the result in VX.
+                        // VF is set to 0 when there is a borrow, set to 1 when there isn't.
+                        op_trace_xy_op("SUB", cpu);
+
+                        let (vx, vy) = op_xy(cpu);
+                        let (x, y) = (cpu.registers[vx as usize], cpu.registers[vy as usize]);
+                        let result = x as isize - y as isize;
+                        cpu.registers[vx as usize] = (result & 0xF) as u8; // Overflow wrap
+                        cpu.registers[0xF] = if y > x { 0 } else { 1 };
+                        cpu.pc += 2;
+                    }
+                    _ => {
+                        panic!(
+                            "Unsupported opcode {:02X}__{:02} at address {:04X}",
+                            code,
+                            op_n(cpu),
+                            cpu.pc
+                        );
+                    }
+                },
                 0xA => {
                     // ANNN
                     // Set address register I to value NNN.
@@ -120,8 +235,8 @@ impl Interpreter for BytecodeInterpreter {
                     {
                         // Each row is 8 bits representing the 8 pixels of the sprite.
                         for c in 0..8 {
-                            let d =
-                                ((x + c) % DISPLAY_WIDTH) + ((y + r) % DISPLAY_HEIGHT) * DISPLAY_WIDTH;
+                            let d = ((x + c) % DISPLAY_WIDTH)
+                                + ((y + r) % DISPLAY_HEIGHT) * DISPLAY_WIDTH;
 
                             let old_px = cpu.display[d];
                             let new_px = old_px ^ ((row >> (7 - c) & 0x1) == 1);
@@ -172,6 +287,24 @@ fn op_trace_xyn(name: &str, cpu: &Chip8Cpu) {
     );
 }
 
+#[cfg(feature = "op_trace")]
+#[inline]
+fn op_trace_xy(name: &str, cpu: &Chip8Cpu) {
+    let (vx, vy) = op_xy(cpu);
+    println!("{:04X}: {:4} V{:02X} V{:02X}", cpu.pc, name, vx, vy);
+}
+
+#[cfg(feature = "op_trace")]
+#[inline]
+fn op_trace_xy_op(name: &str, cpu: &Chip8Cpu) {
+    let (vx, vy) = op_xy(cpu);
+    let op2 = op_n(cpu);
+    println!(
+        "{:04X}: {:4} V{:02X} V{:02X} {:02X}",
+        cpu.pc, name, vx, vy, op2
+    );
+}
+
 #[cfg(not(feature = "op_trace"))]
 #[inline]
 fn op_trace_nnn(_: &str, _: &Chip8Cpu) {}
@@ -183,3 +316,11 @@ fn op_trace_xnn(_: &str, _: &Chip8Cpu) {}
 #[cfg(not(feature = "op_trace"))]
 #[inline]
 fn op_trace_xyn(_: &str, _: &Chip8Cpu) {}
+
+#[cfg(not(feature = "op_trace"))]
+#[inline]
+fn op_trace_xy(_: &str, _: &Chip8Cpu) {}
+
+#[cfg(not(feature = "op_trace"))]
+#[inline]
+fn op_trace_xy_op(_: &str, _: &Chip8Cpu) {}

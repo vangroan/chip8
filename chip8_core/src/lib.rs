@@ -20,6 +20,8 @@ pub type Address = u16;
 pub struct Chip8Cpu {
     /// Program counter pointing to the current position in the bytecode.
     pub pc: usize,
+    /// Stack pointer, indicating the top of the stack.
+    pub sp: usize,
     /// General purpose registers for temporary values.
     ///
     /// Register 16 (VF) is used for either the carry flag or borrow switch depending on opcode.
@@ -43,6 +45,7 @@ impl Default for Chip8Cpu {
     fn default() -> Self {
         Self {
             pc: 0,
+            sp: 0,
             registers: [0; 16],
             address: 0,
             stack: [0; 12],

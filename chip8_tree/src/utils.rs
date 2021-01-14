@@ -1,5 +1,3 @@
-use chip8_core::Chip8Cpu;
-
 #[inline(always)]
 pub fn op_code(ram: &[u8], pc: usize) -> u8 {
     (ram[pc] & 0b1111_0000) >> 4
