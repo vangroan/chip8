@@ -1,6 +1,6 @@
 //! Opcode implementations.
 use crate::SimNode;
-use chip8_core::{prelude::*, Address, SCREEN_BUF_COUNT, SCREEN_HEIGHT, SCREEN_WIDTH};
+use chip8_core::{prelude::*, Address, DISPLAY_BUF_COUNT, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use rand::{prelude::*, thread_rng};
 
 pub enum OpCode {
@@ -139,16 +139,16 @@ impl SimNode for DrwNode {
         {
             // Each row is 8 bits representing the 8 pixels of the sprite.
             for c in 0..8 {
-                let d = ((x + c) % SCREEN_WIDTH) + ((y + r) % SCREEN_HEIGHT) * SCREEN_WIDTH;
+                let d = ((x + c) % DISPLAY_WIDTH) + ((y + r) % DISPLAY_HEIGHT) * DISPLAY_WIDTH;
 
-                let old_px = cpu.screen[d];
+                let old_px = cpu.display[d];
                 let new_px = old_px ^ ((row >> (7 - c) & 0x1) == 1);
 
                 // XOR erases a pixel when both the old and new values are both 1.
                 is_erased |= old_px && new_px;
 
                 // Write to display buffer
-                cpu.screen[d] = new_px;
+                cpu.display[d] = new_px;
             }
         }
 
@@ -165,7 +165,7 @@ pub type Sprite = [u8; 4];
 pub struct ExecutionContext {
     registers: [u8; 16],
     data: [Sprite; 2],
-    display: [bool; SCREEN_BUF_COUNT],
+    display: [bool; DISPLAY_BUF_COUNT],
 }
 
 impl ExecutionContext {
@@ -173,7 +173,7 @@ impl ExecutionContext {
         Self {
             registers: [0; 16],
             data: [[0; 4]; 2],
-            display: [false; SCREEN_BUF_COUNT],
+            display: [false; DISPLAY_BUF_COUNT],
         }
     }
 
@@ -182,9 +182,9 @@ impl ExecutionContext {
 
         let mut buf = String::new();
 
-        for y in 0..SCREEN_HEIGHT {
-            for x in 0..SCREEN_WIDTH {
-                if self.display[x + y * SCREEN_WIDTH] {
+        for y in 0..DISPLAY_HEIGHT {
+            for x in 0..DISPLAY_WIDTH {
+                if self.display[x + y * DISPLAY_WIDTH] {
                     write!(buf, "#")?;
                 } else {
                     write!(buf, ".")?;
@@ -248,7 +248,7 @@ pub fn compile_maze<'s>() -> CompiledExpr<'s> {
         for (r, row) in sprite.iter().enumerate() {
             // Each row is 8 bits representing the 8 pixels of the sprite.
             for c in 0..8 {
-                let d = ((x + c) % SCREEN_WIDTH) + ((y + r) % SCREEN_HEIGHT) * SCREEN_WIDTH;
+                let d = ((x + c) % DISPLAY_WIDTH) + ((y + r) % DISPLAY_HEIGHT) * DISPLAY_WIDTH;
 
                 let old_px = ctx.display[d];
                 let new_px = old_px ^ ((row >> (7 - c) & 0x1) == 1);

@@ -9,9 +9,9 @@ pub mod prelude {
 /// but is now used for fonts.
 pub const MEM_START: usize = 0x200;
 
-pub const SCREEN_WIDTH: usize = 64;
-pub const SCREEN_HEIGHT: usize = 32;
-pub const SCREEN_BUF_COUNT: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
+pub const DISPLAY_WIDTH: usize = 64;
+pub const DISPLAY_HEIGHT: usize = 32;
+pub const DISPLAY_BUF_COUNT: usize = DISPLAY_WIDTH * DISPLAY_HEIGHT;
 
 /// Type for storing the 12-bit memory addresses.
 pub type Address = u16;
@@ -36,7 +36,7 @@ pub struct Chip8Cpu {
     /// Main memory storage space.
     pub ram: [u8; 4096],
     /// Screen buffer that is drawn too.
-    pub screen: [bool; SCREEN_BUF_COUNT],
+    pub display: [bool; DISPLAY_BUF_COUNT],
 }
 
 impl Default for Chip8Cpu {
@@ -49,7 +49,7 @@ impl Default for Chip8Cpu {
             delay: 0,
             sound: 0,
             ram: [0; 4096],
-            screen: [false; SCREEN_BUF_COUNT],
+            display: [false; DISPLAY_BUF_COUNT],
         }
     }
 }
@@ -115,9 +115,9 @@ impl<T: Interpreter> Chip8Vm<T> {
     pub fn dump_display(&self) -> Result<String, std::fmt::Error> {
         let mut buf = String::new();
 
-        for y in 0..SCREEN_HEIGHT {
-            for x in 0..SCREEN_WIDTH {
-                if self.cpu.screen[x + y * SCREEN_WIDTH] {
+        for y in 0..DISPLAY_HEIGHT {
+            for x in 0..DISPLAY_WIDTH {
+                if self.cpu.display[x + y * DISPLAY_WIDTH] {
                     write!(buf, "#")?;
                 } else {
                     write!(buf, ".")?;

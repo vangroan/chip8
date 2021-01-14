@@ -1,6 +1,6 @@
 //! Bytecode interpreter.
 use crate::utils::*;
-use chip8_core::{prelude::*, Address, SCREEN_HEIGHT, SCREEN_WIDTH};
+use chip8_core::{prelude::*, Address, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use rand::prelude::*;
 
 pub mod utils;
@@ -27,6 +27,14 @@ impl Interpreter for BytecodeInterpreter {
             let code = op_code(cpu);
 
             match code {
+                0x00E0 => {
+                    // 00E0
+                    // Clear display
+                    for px in &mut cpu.display {
+                        *px = false;
+                    }
+                    cpu.pc += 2;
+                }
                 0x1 => {
                     // 1NNN
                     // Jump to address.
@@ -113,16 +121,16 @@ impl Interpreter for BytecodeInterpreter {
                         // Each row is 8 bits representing the 8 pixels of the sprite.
                         for c in 0..8 {
                             let d =
-                                ((x + c) % SCREEN_WIDTH) + ((y + r) % SCREEN_HEIGHT) * SCREEN_WIDTH;
+                                ((x + c) % DISPLAY_WIDTH) + ((y + r) % DISPLAY_HEIGHT) * DISPLAY_WIDTH;
 
-                            let old_px = cpu.screen[d];
+                            let old_px = cpu.display[d];
                             let new_px = old_px ^ ((row >> (7 - c) & 0x1) == 1);
 
                             // XOR erases a pixel when both the old and new values are both 1.
                             is_erased |= old_px && new_px;
 
                             // Write to display buffer
-                            cpu.screen[d] = new_px;
+                            cpu.display[d] = new_px;
                         }
                     }
 
