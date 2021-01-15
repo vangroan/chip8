@@ -1,5 +1,8 @@
 /// Core Chip8 state common to all interpreter types.
+pub mod utils;
+
 use std::fmt::Write as FmtWrite;
+use utils::*;
 
 pub mod prelude {
     pub use super::{Chip8Cpu, Chip8Vm, Interpreter};
@@ -57,7 +60,47 @@ impl Default for Chip8Cpu {
     }
 }
 
-impl Chip8Cpu {}
+impl Chip8Cpu {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Extract opcode from the current program pointer.
+    #[inline(always)]
+    pub fn op_code(&self) -> u8 {
+        op_code(&self.ram, self.pc)
+    }
+
+    /// Extract operand NNN from the current program counter.
+    #[inline(always)]
+    pub fn op_nnn(&self) -> u16 {
+        op_nnn(&self.ram, self.pc)
+    }
+
+    /// Extract operands VX and NN from the current program counter.
+    #[inline(always)]
+    pub fn op_xnn(&self) -> (u8, u8) {
+        op_xnn(&self.ram, self.pc)
+    }
+
+    /// Extract operands VX, VY and N from the current program counter.
+    #[inline(always)]
+    pub fn op_xyn(&self) -> (u8, u8, u8) {
+        op_xyn(&self.ram, self.pc)
+    }
+
+    /// Extract operands VX, VY and N from the current program counter.
+    #[inline(always)]
+    pub fn op_xy(&self) -> (u8, u8) {
+        op_xy(&self.ram, self.pc)
+    }
+
+    /// Extract operand N from the current program counter.
+    #[inline(always)]
+    pub fn op_n(&self) -> u8 {
+        op_n(&self.ram, self.pc)
+    }
+}
 
 pub trait Interpreter {
     /// Called after bytecode has been loaded into the VM memory.

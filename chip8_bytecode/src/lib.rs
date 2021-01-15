@@ -3,7 +3,10 @@ use crate::utils::*;
 use chip8_core::{prelude::*, Address, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use rand::prelude::*;
 
+mod dis;
 pub mod utils;
+
+pub use dis::Disassembler;
 
 pub struct BytecodeInterpreter;
 
@@ -54,6 +57,8 @@ impl Interpreter for BytecodeInterpreter {
                 0x2 => {
                     // 2NNN
                     // Call subroutine at NNN.
+                    op_trace_nnn("CALL", cpu);
+
                     cpu.sp += 1;
                     cpu.stack[cpu.sp] = cpu.pc as u16;
                     cpu.pc = op_nnn(cpu) as usize;

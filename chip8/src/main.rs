@@ -1,16 +1,20 @@
-use chip8_bytecode::BytecodeInterpreter;
+use chip8_bytecode::{BytecodeInterpreter, Disassembler};
 use chip8_core::prelude::*;
 use chip8_tree::StaticSimulator;
 use std::{error::Error, time::Instant};
+
+const BYTECODE: &[u8] = include_bytes!("../programs/maze");
 
 fn run_bytecode() -> Result<(), Box<dyn Error>> {
     println!("Running Bytecode Interpreter");
 
     let interpreter = BytecodeInterpreter;
     let mut vm = Chip8Vm::new(interpreter);
-    vm.load_bytecode(include_bytes!("../programs/maze"));
+    vm.load_bytecode(BYTECODE);
 
-    println!("{}", vm.dump_ram(include_bytes!("../programs/maze").len())?);
+    Disassembler::new(BYTECODE).print_bytecode();
+
+    // println!("{}", vm.dump_ram(include_bytes!("../programs/maze").len())?);
 
     let start = Instant::now();
     vm.execute();
