@@ -1,5 +1,4 @@
 /// Convenience helpers for extracting data from opcodes.
-use crate::Chip8Cpu;
 
 /// Extract opcode from the buffer at the cursor.
 #[inline(always)]

@@ -1,5 +1,5 @@
 //! Disassembler.
-use chip8_core::{utils::*, Chip8Cpu};
+use chip8_core::{utils::*};
 use std::fmt::{self, Write as FmtWrite};
 
 pub struct Disassembler<'a> {

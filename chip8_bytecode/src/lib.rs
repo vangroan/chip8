@@ -133,8 +133,7 @@ impl Interpreter for BytecodeInterpreter {
                         op_trace_xy_op("OR", cpu);
 
                         let (vx, vy) = op_xy(cpu);
-                        cpu.registers[vx as usize] =
-                            cpu.registers[vx as usize] | cpu.registers[vy as usize];
+                        cpu.registers[vx as usize] |= cpu.registers[vy as usize];
                         cpu.pc += 2;
                     }
                     0x2 => {
@@ -143,8 +142,7 @@ impl Interpreter for BytecodeInterpreter {
                         op_trace_xy_op("AND", cpu);
 
                         let (vx, vy) = op_xy(cpu);
-                        cpu.registers[vx as usize] =
-                            cpu.registers[vx as usize] & cpu.registers[vy as usize];
+                        cpu.registers[vx as usize] &= cpu.registers[vy as usize];
                         cpu.pc += 2;
                     }
                     0x3 => {
@@ -153,8 +151,7 @@ impl Interpreter for BytecodeInterpreter {
                         op_trace_xy_op("XOR", cpu);
 
                         let (vx, vy) = op_xy(cpu);
-                        cpu.registers[vx as usize] =
-                            cpu.registers[vx as usize] ^ cpu.registers[vy as usize];
+                        cpu.registers[vx as usize] ^= cpu.registers[vy as usize];
                         cpu.pc += 2;
                     }
                     0x4 => {

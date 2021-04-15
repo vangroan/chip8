@@ -29,19 +29,17 @@ fn run_bytecode() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_tree() -> Result<(), Box<dyn Error>> {
+fn run_tree() {
     println!("Running Tree Interpreter");
 
     let interpreter = StaticSimulator::new();
     let mut vm = Chip8Vm::new(interpreter);
     vm.load_bytecode(include_bytes!("../programs/maze"));
-
-    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     run_bytecode()?;
-    run_tree()?;
+    run_tree();
 
     Ok(())
 }
