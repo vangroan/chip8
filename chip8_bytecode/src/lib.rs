@@ -181,6 +181,45 @@ impl Interpreter for BytecodeInterpreter {
                         cpu.registers[0xF] = if y > x { 0 } else { 1 };
                         cpu.pc += 2;
                     }
+                    0x6 => {
+                        // 8XY6
+                        // If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0.
+                        // Shift VX right by 1.
+                        // VY is unused.
+                        op_trace_xy_op("SHR", cpu);
+
+                        let (vx, _vy) = op_xy(cpu);
+                        let x = cpu.registers[vx as usize];
+                        cpu.registers[0xF] = x & 1;
+                        cpu.registers[vx as usize] = x >> 1;
+                        cpu.pc += 2;
+                    }
+                    0x7 => {
+                        // 8XY7 - SUBN Vx, Vy
+                        // Subtracts VX from VY, and stores the result in VX.
+                        // VF is set to 0 when there is a borrow, set to 1 when there isn't.
+                        op_trace_xy_op("SUBN", cpu);
+
+                        let (vx, vy) = op_xy(cpu);
+                        let (x, y) = (cpu.registers[vx as usize], cpu.registers[vy as usize]);
+                        let result = y as isize - x as isize;
+                        cpu.registers[vx as usize] = (result & 0xF) as u8; // Overflow wrap
+                        cpu.registers[0xF] = if x > y { 0 } else { 1 };
+                        cpu.pc += 2;
+                    }
+                    0xE => {
+                        // 8XYE
+                        // If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0.
+                        // Shift VX left by 1.
+                        // VY is unused.
+                        op_trace_xy_op("SHL", cpu);
+
+                        let (vx, _vy) = op_xy(cpu);
+                        let x = cpu.registers[vx as usize];
+                        cpu.registers[0xF] = x & 1;
+                        cpu.registers[vx as usize] = x << 1;
+                        cpu.pc += 2;
+                    }
                     _ => {
                         panic!(
                             "Unsupported opcode {:02X}__{:02} at address {:04X}",
@@ -197,6 +236,9 @@ impl Interpreter for BytecodeInterpreter {
 
                     cpu.address = op_nnn(cpu);
                     cpu.pc += 2;
+                }
+                0xB => {
+                    todo!()
                 }
                 0xC => {
                     // CXNN

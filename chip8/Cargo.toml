@@ -6,6 +6,14 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+# Increases runtime performance because
+# LLVM has more opportunities to inline functions.
+#
+# Slows down compilation.
+codegen-units = 1
+lto = "fat"
+
 [dependencies]
 chip8_core = { version = "*", path = "../chip8_core" }
 chip8_bytecode = { version = "*", path = "../chip8_bytecode" }
