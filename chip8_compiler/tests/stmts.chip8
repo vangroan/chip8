@@ -1,0 +1,5 @@
+/// Constant value definition
+const VALUE1: u8 = 128;
+
+/// Variable definition
+var value2: u8 = 16;
