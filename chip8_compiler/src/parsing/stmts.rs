@@ -1,6 +1,6 @@
 //! Statement parsing.
-use crate::{tokens::Token, trivia::SyntaxTrivia};
 use super::expr::Expr;
+use crate::{tokens::Token, trivia::SyntaxTrivia};
 
 #[derive(Debug)]
 pub enum Stmt {

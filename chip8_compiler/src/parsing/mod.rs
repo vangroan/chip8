@@ -1,12 +1,12 @@
-mod stmts;
-mod unit;
 mod block;
 mod expr;
+mod stmts;
+mod unit;
 
+pub use block::*;
 pub use expr::*;
 pub use stmts::*;
 pub use unit::*;
-pub use block::*;
 
 use crate::lex::TokenStream;
 use std::{error::Error, fmt};

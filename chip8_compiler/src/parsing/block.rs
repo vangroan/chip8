@@ -1,4 +1,4 @@
-use super::{Parse, ParseError, stmts::Stmt};
+use super::{stmts::Stmt, Parse, ParseError};
 use crate::lex::TokenStream;
 
 #[derive(Debug)]
@@ -14,4 +14,3 @@ impl Parse for Block {
         todo!()
     }
 }
-

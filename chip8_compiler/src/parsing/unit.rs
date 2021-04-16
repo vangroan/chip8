@@ -1,5 +1,5 @@
 //! Compilation unit.
-use super::{Parse, ParseError, block::Block};
+use super::{block::Block, Parse, ParseError};
 use crate::lex::TokenStream;
 
 #[derive(Debug)]
