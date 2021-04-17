@@ -3,7 +3,7 @@ use super::{
     Parse, ParseError,
 };
 use crate::{
-    lex::{TokenError, TokenStream},
+    token_stream::{TokenError, TokenStream},
     tokens::{KeywordKind, TokenKind},
 };
 

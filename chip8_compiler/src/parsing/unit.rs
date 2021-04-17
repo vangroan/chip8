@@ -1,6 +1,6 @@
 //! Compilation unit.
 use super::{block::Block, Parse, ParseError};
-use crate::lex::{TokenStream};
+use crate::token_stream::TokenStream;
 
 #[derive(Debug)]
 pub struct CompilationUnit {
@@ -12,6 +12,8 @@ impl Parse for CompilationUnit {
     type Err = ParseError;
 
     fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
-        Ok(Self { block: Block::parse(input)? })
+        Ok(Self {
+            block: Block::parse(input)?,
+        })
     }
 }

@@ -1,4 +1,8 @@
-use chip8_compiler::{lex::{debug_print_lexer, Lexer, TokenStream}, parsing::{CompilationUnit, Parse}};
+use chip8_compiler::{
+    lex::{debug_print_lexer, Lexer},
+    parsing::{CompilationUnit, Parse},
+    token_stream::TokenStream,
+};
 
 const SOURCE: &str = include_str!("stmts.chip8");
 

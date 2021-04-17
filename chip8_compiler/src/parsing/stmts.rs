@@ -1,7 +1,7 @@
 //! Statement parsing.
 use super::{expr::Expr, Parse, ParseError};
 use crate::{
-    lex::{TokenError, TokenStream},
+    token_stream::{TokenError, TokenStream},
     tokens::{KeywordKind, Token, TokenKind},
     trivia::SyntaxTrivia,
 };
@@ -115,11 +115,11 @@ impl Parse for VarDef {
             .fragment_span(&ident.span)
             .map(|s| s.to_owned())
             .expect("identifier has no fragment");
-        
+
         // TODO: Parse optional type
         input.match_token(TokenKind::Colon);
         input.match_token(TokenKind::Ident);
-        
+
         let rhs = input.match_token(TokenKind::Eq).then(|| Expr::NoOp);
 
         Ok(Self {

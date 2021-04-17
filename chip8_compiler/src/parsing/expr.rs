@@ -1,5 +1,5 @@
 use super::{Parse, ParseError};
-use crate::lex::TokenStream;
+use crate::token_stream::TokenStream;
 
 #[derive(Debug)]
 pub enum Expr {

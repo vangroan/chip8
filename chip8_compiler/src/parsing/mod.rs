@@ -1,16 +1,16 @@
 mod block;
 mod expr;
+mod ident;
 mod stmts;
 mod unit;
-mod ident;
 
-pub use ident::*;
 pub use block::*;
 pub use expr::*;
+pub use ident::*;
 pub use stmts::*;
 pub use unit::*;
 
-use crate::lex::{TokenStream, TokenError};
+use crate::token_stream::{TokenError, TokenStream};
 use std::{error::Error, fmt};
 
 pub trait Parse: Sized {
