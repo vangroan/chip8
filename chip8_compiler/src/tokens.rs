@@ -75,6 +75,7 @@ impl FromStr for KeywordKind {
         use KeywordKind as K;
         match s {
             "const" => Ok(K::Const),
+            "var" => Ok(K::Var),
             _ => Err(()),
         }
     }

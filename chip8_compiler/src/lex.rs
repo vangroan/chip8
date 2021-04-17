@@ -54,6 +54,7 @@ pub struct TokenStream<'a> {
 }
 
 impl<'a> TokenStream<'a> {
+    #[inline]
     pub fn new(lexer: Lexer<'a>) -> Self {
         Self {
             source: lexer.source.original,
@@ -71,6 +72,11 @@ impl<'a> TokenStream<'a> {
         I: SliceIndex<str, Output = str>,
     {
         self.source.get(index)
+    }
+
+    #[inline]
+    pub fn fragment_span(&self, span: &Span) -> Option<&str> {
+        self.fragment(span.start..=span.end)
     }
 
     /// Consumes the current token regardless of type.
@@ -122,12 +128,12 @@ impl<'a> TokenStream<'a> {
                     // TODO: Return parsing error.
                     Err(TokenError::Mismatch {
                         expected: token_kind,
-                        encountered: token.kind.clone(),
+                        encountered: token.kind,
                     })
                 } else {
                     self.lexer
                         .next()
-                        .ok_or_else(|| TokenError::EndOfSource)?
+                        .ok_or(TokenError::EndOfSource)?
                         .map_err(TokenError::Lex)
                 }
             }
@@ -137,6 +143,7 @@ impl<'a> TokenStream<'a> {
     }
 
     /// Consumes one or more new lines until something else is reached.
+    #[inline]
     pub fn match_lines(&mut self) {
         self.lexer.reset_peek();
         if let Some(Ok(token)) = self.lexer.peek() {
@@ -149,16 +156,20 @@ impl<'a> TokenStream<'a> {
         }
     }
 
-    // / Return the current token without advancing the cursor.
-    // /
-    // / Returns `None` when lexing is done.
-    // pub fn peek(&mut self) -> Result<&Token, TokenError> {
-    //     self.lexer
-    //         .peek()
-    //         .unwrap_or_else(|| &Err(TokenError::EndOfSource))
-    //         .map_err(TokenError::Lex)
-    //         .map(|t| &t)
-    // }
+    /// Return the current token without advancing the cursor.
+    ///
+    /// Returns `None` when lexing is done.
+    #[inline]
+    pub fn peek(&mut self) -> Result<&Token, TokenError> {
+        match self.lexer.peek() {
+            Some(result) => result.as_ref().map_err(|err| TokenError::Lex(err.clone())),
+            None => Err(TokenError::EndOfSource),
+        }
+    }
+
+    pub fn reset_peek(&mut self) {
+        self.lexer.reset_peek()
+    }
 }
 
 /// Error returned when an unexpected token type is encountered.
