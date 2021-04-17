@@ -167,6 +167,7 @@ impl<'a> TokenStream<'a> {
         }
     }
 
+    /// Set peek cursor back to the current cursor.
     pub fn reset_peek(&mut self) {
         self.lexer.reset_peek()
     }
