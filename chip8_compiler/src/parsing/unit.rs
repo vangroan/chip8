@@ -11,7 +11,10 @@ impl Parse for CompilationUnit {
     type Output = Self;
     type Err = ParseError;
 
-    fn parse(_input: &TokenStream) -> Result<Self, ParseError> {
+    fn parse(input: &TokenStream) -> Result<Self, ParseError> {
+        // while let Some(token) = input.peek() {
+
+        // }
         todo!()
     }
 }

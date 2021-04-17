@@ -6,7 +6,7 @@ pub struct Token {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     Eq,         // `=`
     Slash,      // `/`
@@ -30,7 +30,28 @@ pub enum TokenKind {
     EOS,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl fmt::Display for TokenKind {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TokenKind as T;
+
+        match self {
+            T::Eq         => write!(f, "="),
+            T::Slash      => write!(f, "/"),
+            T::Comment    => write!(f, "comment"),
+            T::DocComment => write!(f, "doc-comment"),
+            T::Colon      => write!(f, ":"),
+            T::Semicolon  => write!(f, ";"),
+            T::Number     => write!(f, "number"),
+            T::Newline    => write!(f, "newline"),
+            T::Ident      => write!(f, "ident"),
+            T::Keyword(k) => fmt::Display::fmt(k, f),
+            T::EOS        => write!(f, "end-of-source"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeywordKind {
     Const,
     Var,
