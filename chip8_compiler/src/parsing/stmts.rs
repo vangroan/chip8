@@ -1,5 +1,5 @@
 //! Statement parsing.
-use super::{expr::Expr, Parse, ParseError};
+use super::{expr::Expr, ident::Ident, Parse, ParseError};
 use crate::{
     token_stream::{TokenError, TokenStream},
     tokens::{KeywordKind, Token, TokenKind},
@@ -27,8 +27,9 @@ pub enum Stmt {
 pub struct ConstDef {
     pub keyword: Token,
     pub name: String,
-    // TODO: Eq token
-    pub rhs: Option<Expr>,
+    pub ty: DefTy,
+    pub eq: Token,
+    pub rhs: Expr,
     pub trail: Option<SyntaxTrivia>,
 }
 
@@ -36,9 +37,20 @@ pub struct ConstDef {
 pub struct VarDef {
     pub keyword: Token,
     pub name: String,
-    // TODO: Eq token
+    pub ty: Option<DefTy>,
+    pub eq: Option<Token>,
     pub rhs: Option<Expr>,
     pub trail: Option<SyntaxTrivia>,
+}
+
+/// Type specified in a definition statement.
+///
+/// In the following example the `: u8` is
+/// part of the `DefTy` node.
+#[derive(Debug)]
+pub struct DefTy {
+    pub colon: Token,
+    pub ty: Ident,
 }
 
 impl Parse for Stmt {
@@ -82,22 +94,24 @@ impl Parse for ConstDef {
     type Err = ParseError;
 
     fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
-        let keyword = input.consume(TokenKind::Keyword(KeywordKind::Const))?;
-        let ident = input.consume(TokenKind::Ident)?;
+        use TokenKind as T;
+
+        let keyword = input.consume(T::Keyword(KeywordKind::Const))?;
+        let ident = input.consume(T::Ident)?;
         let name = input
             .fragment_span(&ident.span)
             .map(|s| s.to_owned())
             .expect("identifier has no fragment");
 
-        // TODO: Parse optional type
-        input.match_token(TokenKind::Colon);
-        input.match_token(TokenKind::Ident);
-
-        let rhs = input.match_token(TokenKind::Eq).then(|| Expr::NoOp);
+        let ty = DefTy::parse(input)?;
+        let eq = input.consume(T::Eq)?;
+        let rhs = Expr::parse(input)?;
 
         Ok(Self {
             keyword,
             name,
+            ty,
+            eq,
             rhs,
             trail: None,
         })
@@ -109,24 +123,64 @@ impl Parse for VarDef {
     type Err = ParseError;
 
     fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
-        let keyword = input.consume(TokenKind::Keyword(KeywordKind::Var))?;
-        let ident = input.consume(TokenKind::Ident)?;
+        use TokenKind as T;
+
+        let keyword = input.consume(T::Keyword(KeywordKind::Var))?;
+        let ident = input.consume(T::Ident)?;
         let name = input
             .fragment_span(&ident.span)
             .map(|s| s.to_owned())
             .expect("identifier has no fragment");
 
-        // TODO: Parse optional type
-        input.match_token(TokenKind::Colon);
-        input.match_token(TokenKind::Ident);
+        // Type is optional
+        let ty = if input.peek_match(T::Colon) {
+            Some(DefTy::parse(input)?)
+        } else {
+            None
+        };
+        // println!("ty: {:#?}", ty);
 
-        let rhs = input.match_token(TokenKind::Eq).then(|| Expr::NoOp);
+        // Previous peek was for optional token.
+        // We need to peek the same position.
+        input.reset_peek();
 
-        Ok(Self {
-            keyword,
-            name,
-            rhs,
-            trail: None,
+        // RHS is optional.
+        let (eq, rhs) = if input.peek_match(T::Eq) {
+            let eq = input.consume(T::Eq)?;
+            let expr = Expr::parse(input)?;
+            (Some(eq), Some(expr))
+        } else {
+            (None, None)
+        };
+        // println!("eq: {:#?}\nrhs: {:#?}", eq, rhs);
+
+        // Either or both of the type or the RHS must be
+        // present. If neither then invalid.
+        if ty.is_none() && eq.is_none() && rhs.is_none() {
+            Err(ParseError::Generic {
+                msg: "variable definition must either specify a type or assign a value".to_owned(),
+            })
+        } else {
+            Ok(VarDef {
+                keyword,
+                name,
+                ty,
+                eq,
+                rhs,
+                trail: None,
+            })
+        }
+    }
+}
+
+impl Parse for DefTy {
+    type Output = Self;
+    type Err = ParseError;
+
+    fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
+        Ok(DefTy {
+            colon: input.consume(TokenKind::Colon)?,
+            ty: Ident::parse(input)?,
         })
     }
 }

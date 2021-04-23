@@ -54,8 +54,8 @@ impl<'a> TokenStream<'a> {
     ///
     /// Returns `None` when the cursor is at the end of the token stream.
     #[inline]
-    pub fn next_token(&mut self) -> Option<Result<Token, LexError>> {
-        self.lexer.next()
+    pub fn next_token(&mut self) -> Option<Result<Token, TokenError>> {
+        self.lexer.next().map(|result| result.map_err(|err| TokenError::Lex(err)))
     }
 
     /// Consumes the current token if it matches the given token type.
@@ -102,10 +102,7 @@ impl<'a> TokenStream<'a> {
                         encountered: token.kind,
                     })
                 } else {
-                    self.lexer
-                        .next()
-                        .ok_or(TokenError::EndOfSource)?
-                        .map_err(TokenError::Lex)
+                    self.lexer.next().ok_or(TokenError::EndOfSource)?.map_err(TokenError::Lex)
                 }
             }
             Some(Err(err)) => Err(TokenError::Lex(err.clone())),
@@ -138,6 +135,14 @@ impl<'a> TokenStream<'a> {
         }
     }
 
+    /// Peeks the next token for the given token kind.
+    ///
+    /// Advances the peek cursor forward.
+    #[inline]
+    pub fn peek_match(&mut self, token_kind: TokenKind) -> bool {
+        self.peek().map(|t| t.kind).map(|kind| kind == token_kind).unwrap_or(false)
+    }
+
     /// Set peek cursor back to the current cursor.
     pub fn reset_peek(&mut self) {
         self.lexer.reset_peek()
@@ -147,10 +152,8 @@ impl<'a> TokenStream<'a> {
 /// Error returned when an unexpected token type is encountered.
 #[derive(Debug)]
 pub enum TokenError {
-    Mismatch {
-        expected: TokenKind,
-        encountered: TokenKind,
-    },
+    Mismatch { expected: TokenKind, encountered: TokenKind },
+    Unexpected { encountered: TokenKind, msg: String },
     EndOfSource,
     Lex(LexError),
 }
@@ -161,14 +164,12 @@ impl fmt::Display for TokenError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TokenError as E;
         match self {
-            E::Mismatch {
-                expected,
-                encountered,
-            } => write!(
-                f,
-                "encountered unexpected token '{}', expected '{}'",
-                encountered, expected
-            ),
+            E::Mismatch { expected, encountered } => {
+                write!(f, "encountered unexpected token '{}', expected '{}'", encountered, expected)
+            }
+            E::Unexpected { encountered, msg } => {
+                write!(f, "encountered unexpected token '{}': {}", encountered, msg)
+            }
             E::EndOfSource => write!(f, "unexpected end of source code"),
             E::Lex(err) => fmt::Display::fmt(err, f),
         }

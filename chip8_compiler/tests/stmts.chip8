@@ -2,4 +2,7 @@
 const VALUE1: u8 = 128;
 
 /// Variable definition
+///
+/// In future variables will not be allowed
+/// at top level.
 var value2: u8 = 16;

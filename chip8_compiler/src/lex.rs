@@ -24,10 +24,7 @@ pub fn debug_print_lexer(lexer: Lexer) {
                         "\t" => "\\t",
                         fragment => fragment,
                     };
-                    println!(
-                        "{:4}-{} {:<10} {:?}",
-                        token.span.start, token.span.end, fragment, token.kind
-                    );
+                    println!("{:4}-{} {:<10} {:?}", token.span.start, token.span.end, fragment, token.kind);
                 }
             }
             Err(err) => println!("{:?}", err),
@@ -62,6 +59,9 @@ impl<'a> Lexer<'a> {
                 self.start_token();
 
                 match next_char {
+                    '+'               => return Ok(self.make_token(T::Plus)),
+                    '-'               => return Ok(self.make_token(T::Minus)),
+                    '*'               => return Ok(self.make_token(T::Star)),
                     '='               => return Ok(self.make_token(T::Eq)),
                     ':'               => return Ok(self.make_token(T::Colon)),
                     ';'               => return Ok(self.make_token(T::Semicolon)),
@@ -123,10 +123,7 @@ impl<'a> Lexer<'a> {
             end_line: token_end.line,
         };
 
-        Token {
-            kind: token_kind,
-            span,
-        }
+        Token { kind: token_kind, span }
     }
 
     /// Consume whitespace characters like space, tab and carriage return,

@@ -4,7 +4,7 @@ use chip8_compiler::{
     token_stream::TokenStream,
 };
 
-const SOURCE: &str = include_str!("stmts.chip8");
+const SOURCE: &str = include_str!("expr.chip8");
 
 #[test]
 fn test_lex_stmts() {

@@ -8,6 +8,9 @@ pub struct Token {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
+    Plus,       // `+`
+    Minus,      // `-`
+    Star,       // `*`
     Eq,         // `=`
     Slash,      // `/`
     Comment,    // `//`
@@ -36,6 +39,9 @@ impl fmt::Display for TokenKind {
         use TokenKind as T;
 
         match self {
+            T::Plus       => write!(f, "+"),
+            T::Minus      => write!(f, "-"),
+            T::Star       => write!(f, "*"),
             T::Eq         => write!(f, "="),
             T::Slash      => write!(f, "/"),
             T::Comment    => write!(f, "comment"),
