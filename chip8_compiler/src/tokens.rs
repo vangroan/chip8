@@ -11,8 +11,14 @@ pub enum TokenKind {
     Plus,       // `+`
     Minus,      // `-`
     Star,       // `*`
-    Eq,         // `=`
     Slash,      // `/`
+    Eq,         // `=`
+    EqEq,       // `==`
+    Greater,    // `>`
+    Lesser,     // `<`
+    GreaterEq,  // `>=`
+    LesserEq,   // `<=`
+    Arrow,      // `->`
     Comment,    // `//`
     DocComment, // `///`
     Colon,      // `:`
@@ -43,7 +49,13 @@ impl fmt::Display for TokenKind {
             T::Minus      => write!(f, "-"),
             T::Star       => write!(f, "*"),
             T::Eq         => write!(f, "="),
+            T::EqEq       => write!(f, "=="),
             T::Slash      => write!(f, "/"),
+            T::Greater    => write!(f, ">"),
+            T::Lesser     => write!(f, "<"),
+            T::GreaterEq  => write!(f, ">="),
+            T::LesserEq   => write!(f, "<="),
+            T::Arrow      => write!(f, "->"),
             T::Comment    => write!(f, "comment"),
             T::DocComment => write!(f, "doc-comment"),
             T::Colon      => write!(f, ":"),

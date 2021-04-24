@@ -1,0 +1,20 @@
+
+/// Functions can be defined without
+/// arguments or a return type.
+func foo() {}
+
+/// Functions can be overloaded, reusing the name
+/// as long as the signature is different.
+func foo(a: u8) {}
+
+/// Function that returns nothing implicitly
+/// has the `void` return type. It can be
+/// explicitly specified.
+func foo() -> void {}
+
+func foo(a: u8) -> u8 {
+    // Final statement is the return value
+    // as long as the it's not trailed by
+    // a semicolon.
+    42
+}

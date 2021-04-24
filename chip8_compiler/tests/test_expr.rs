@@ -2,6 +2,7 @@ use chip8_compiler::{
     lex::{debug_print_lexer, Lexer},
     parsing::{CompilationUnit, Parse},
     token_stream::TokenStream,
+    compile::CodeGen,
 };
 
 const SOURCE: &str = include_str!("expr.chip8");
@@ -16,9 +17,17 @@ fn test_lex_stmts() {
 fn test_parse_stmts() {
     let lexer = Lexer::new(SOURCE);
     let mut stream = TokenStream::new(lexer);
-    let syntax_node = CompilationUnit::parse(&mut stream).unwrap();
-    println!("{:#?}", syntax_node);
+    let tree = CompilationUnit::parse(&mut stream).unwrap();
+    println!("{:#?}", tree);
 }
 
 #[test]
-fn test_compile() {}
+fn test_compile() {
+    let lexer = Lexer::new(SOURCE);
+    let mut stream = TokenStream::new(lexer);
+    let tree = CompilationUnit::parse(&mut stream).unwrap();
+    let mut code_gen = CodeGen::new();
+    code_gen.compile(&tree).unwrap();
+    println!("{:#?}", code_gen.code);
+    println!("{:?}", code_gen.mask);
+}

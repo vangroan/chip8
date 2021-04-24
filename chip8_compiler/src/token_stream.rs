@@ -55,7 +55,7 @@ impl<'a> TokenStream<'a> {
     /// Returns `None` when the cursor is at the end of the token stream.
     #[inline]
     pub fn next_token(&mut self) -> Option<Result<Token, TokenError>> {
-        self.lexer.next().map(|result| result.map_err(|err| TokenError::Lex(err)))
+        self.lexer.next().map(|result| result.map_err(TokenError::Lex))
     }
 
     /// Consumes the current token if it matches the given token type.
