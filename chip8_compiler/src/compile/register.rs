@@ -1,7 +1,41 @@
 use std::fmt;
 
 /// Register identifying index.
-pub type Register = u8;
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Register {
+    pub id: RegisterId,
+    pub usage: Usage,
+}
+
+pub type RegisterId = u8;
+
+/// Specifies the lifetime of a register's usage.
+///
+/// Used by the emitter to decide whether a used
+/// register can be freed for future use.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Usage {
+    /// Register is used for evaluating an expression.
+    Temp,
+    /// Register is reserved by a local variable.
+    Var,
+}
+
+impl Register {
+    #[inline]
+    pub fn is_temp(&self) -> bool {
+        self.usage == Usage::Temp
+    }
+}
+
+impl Default for Register {
+    fn default() -> Self {
+        Register {
+            id: 0,
+            usage: Usage::Temp,
+        }
+    }
+}
 
 pub struct RegisterMask(u16);
 
@@ -11,7 +45,10 @@ pub struct RegisterMask(u16);
 /// CHIP-8 is a register machine, so instead of a
 /// stack for holding operands, we have registers.
 /// Inserting and removing specific register indices
-/// replces push-pop semantics.
+/// replaces push-pop semantics.
+///
+/// The code emitter will be using [`RegisterMask::find_vacant()`](struct.RegisterMask.html#method-find_vacant)
+/// to choose empty registers.
 impl RegisterMask {
     /// Only 15 registers are available for arithmetic.
     /// The 16th is a special register used as a flag in

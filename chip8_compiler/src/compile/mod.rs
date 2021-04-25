@@ -3,7 +3,7 @@ mod register;
 mod symbol;
 
 pub use ir::IR;
-use register::{Register, RegisterMask};
+use register::{Register, RegisterMask, Usage};
 pub use symbol::{Symbol, SymbolRealm, SymbolTable, SymbolType};
 
 use crate::{
@@ -15,7 +15,6 @@ use std::{collections::VecDeque, error, fmt};
 
 pub struct CodeGen {
     pub code: Vec<IR>,
-    next_id: usize,
 
     scopes: VecDeque<SymbolTable>,
     pub mask: RegisterMask,
@@ -34,7 +33,6 @@ impl CodeGen {
     pub fn new() -> Self {
         Self {
             code: vec![],
-            next_id: 0,
 
             // Initialize default global scope.
             scopes: VecDeque::from(vec![SymbolTable::default()]),
@@ -66,26 +64,32 @@ impl CodeGen {
         if self.variables.len() > Self::MAX_VARIABLES {
             Err(CompileError::RegisterOverflow)
         } else {
-            let index = self.variables.len();
+            // Important to reserve the register for variable
+            // usage, so it won't be cleared by expressions.
+            let register = Register {
+                usage: Usage::Var,
+                ..self.next_register()?
+            };
             self.variables.push(Var {
                 name: SmolStr::from(name),
+                register: register.clone(),
             });
-            Ok(index as u8)
+            Ok(register)
         }
     }
 
     fn next_register(&mut self) -> Result<Register, CompileError> {
-        self.mask.find_vacant().ok_or(CompileError::RegisterOverflow)
+        self.mask
+            .find_vacant()
+            .map(|id| Register {
+                id,
+                ..Default::default()
+            })
+            .ok_or(CompileError::RegisterOverflow)
     }
 
     fn emit(&mut self, ir: IR) {
         self.code.push(ir)
-    }
-
-    fn next_id(&mut self) -> usize {
-        let id = self.next_id;
-        self.next_id += 1;
-        id
     }
 }
 
@@ -123,29 +127,52 @@ impl CodeGen {
             Expr::Literal(Literal {
                 value: LitValue::U8(val),
                 ..
-            }) => {
-                self.emit_const_u8(*val)
-            }
+            }) => self.emit_const_u8(*val, None),
             Expr::Binary(expr) => {
                 let vx = self.emit_expr(&expr.lhs)?;
                 let vy = self.emit_expr(&expr.rhs)?;
 
                 match expr.operator.kind {
-                    TokenKind::Plus => self.emit(IR::MathAdd(vx, vy)),
+                    TokenKind::Plus => self.emit(IR::MathAdd(vx.id, vy.id)),
                     token_kind => panic!("invalid expression token kind {:?}", token_kind),
                 }
 
-                self.mask.remove(vy);
+                // If the right hand side's register is a temporary value,
+                // then we can clear it after it's used in computation.
+                // This expression is the owner of the sub-expression's
+                // register.
+                //
+                // register is not temporary when it belongs to a variable.
+                // This expression is thus not allowed to remove the register.
+                if vy.is_temp() {
+                    self.mask.remove(vy.id);
+                }
+
                 Ok(vx)
             }
             _ => todo!(),
         }
     }
 
-    fn emit_const_u8(&mut self, value: u8) -> Result<Register, CompileError> {
-        let vx = self.next_register()?;
-        self.emit(IR::SetConst(vx, value));
+    fn emit_const_u8(&mut self, value: u8, result: Option<Register>) -> Result<Register, CompileError> {
+        let vx = match result {
+            Some(r) => r,
+            None => self.next_register()?,
+        };
+        self.emit(IR::SetConst(vx.id, value));
         Ok(vx)
+    }
+
+    /// Move value from one register to another.
+    ///
+    /// If the source register is temporary, it will be
+    /// freed in the mask.
+    fn emit_move(&mut self, src: &Register, dest: &Register) -> Result<(), CompileError> {
+        self.emit(IR::Assign(dest.id, src.id));
+        if src.is_temp() {
+            self.mask.remove(src.id);
+        }
+        Ok(())
     }
 
     fn const_def(&mut self, const_def: &ConstDef) -> Result<(), CompileError> {
@@ -167,7 +194,7 @@ impl CodeGen {
         }
     }
 
-    fn var_def(&mut self, var_def: &VarDef) -> Result<(), CompileError> {
+    fn emit_var_def(&mut self, var_def: &VarDef) -> Result<(), CompileError> {
         // if let Some(scope) = self.scopes.front_mut() {
         //     if scope.contains_symbol(var_def.name.as_str()) {
         //         Err(CompileError::SymbolExists)
@@ -183,23 +210,33 @@ impl CodeGen {
         // } else {
         //     Err(CompileError::NoScope)
         // }
+        // Expression result is will be in the
+        // return register.
+        // TODO: Variable needs a symbol in the symbol table with
+        //       its own reserved register.
+        let r = self.next_register()?;
+
         let vx = match var_def.rhs {
             Some(ref expr) => self.emit_expr(expr)?,
-            None => self.emit_const_u8(0)?,
+            None => self.emit_const_u8(0, Some(r.clone()))?,
         };
-        println!("Variable '{}' in Register V{}", var_def.name, vx);
+        println!("Variable '{}' in Register V{}", var_def.name, vx.id);
+
+        // TODO: We can save on one register if we manage to reuse
+        //       the variable's register for the expression's result.
+        if r != vx {
+            self.emit_move(&vx, &r)?;
+        }
 
         Ok(())
     }
-
-
 
     #[inline]
     fn stmt(&mut self, stmt: &Stmt) -> Result<(), CompileError> {
         match stmt {
             Stmt::Comment => self.comment(),
             Stmt::Const(stmt) => self.const_def(stmt),
-            Stmt::Var(stmt) => self.var_def(stmt),
+            Stmt::Var(stmt) => self.emit_var_def(stmt),
             Stmt::Expr(expr) => self.expr_stmt(expr),
         }
     }
@@ -217,10 +254,13 @@ struct Const {
 
 struct Var {
     name: SmolStr,
+    register: Register,
 }
 
 #[derive(Debug)]
 pub enum CompileError {
+    /// FIXME: NoOp error just so we can convert Option to Result :[
+    NoOp,
     NoScope,
     RegisterOverflow,
     SymbolExists,

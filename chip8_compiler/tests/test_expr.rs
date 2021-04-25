@@ -1,8 +1,8 @@
 use chip8_compiler::{
+    compile::CodeGen,
     lex::{debug_print_lexer, Lexer},
     parsing::{CompilationUnit, Parse},
     token_stream::TokenStream,
-    compile::CodeGen,
 };
 
 const SOURCE: &str = include_str!("expr.chip8");
