@@ -5,11 +5,19 @@ use crate::{
     tokens::{Token, TokenKind},
 };
 use smol_str::SmolStr;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct Ident {
     pub token: Token,
     pub name: SmolStr,
+}
+
+impl fmt::Display for Ident {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 impl Parse for Ident {

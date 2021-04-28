@@ -1,3 +1,6 @@
 
-var a = 1 + 2 + 3 + 4;
-var b = 21 + 22;
+// var a : u8 = 99;
+var a : u8 = 1 + 2 + 3 + 4;
+var b : u8 = 21 + 22;
+// var v : u8 = 1 + doesnt_exist;
+// var c : u8 = a + b + c;

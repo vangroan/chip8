@@ -1,51 +1,44 @@
 mod ir;
+mod mapper;
 mod register;
 mod symbol;
 
-pub use ir::IR;
+pub use ir::{assemble, IR};
+pub use mapper::Mapper;
 use register::{Register, RegisterMask, Usage};
-pub use symbol::{Symbol, SymbolRealm, SymbolTable, SymbolType};
+pub use symbol::{Symbol, SymbolKind, SymbolTable, ValueType};
 
 use crate::{
-    parsing::{AstVisitor, Block, CompilationUnit, ConstDef, Expr, LitValue, Literal, Stmt, VarDef},
+    parsing::{Block, CompilationUnit, ConstDef, Expr, LitValue, Literal, Stmt, VarDef},
     tokens::TokenKind,
 };
 use smol_str::SmolStr;
-use std::{collections::VecDeque, error, fmt};
+use std::{error, fmt};
 
 pub struct CodeGen {
     pub code: Vec<IR>,
-
-    scopes: VecDeque<SymbolTable>,
     pub mask: RegisterMask,
-
-    constants: Vec<Const>,
-    variables: Vec<Var>,
 }
 
 impl CodeGen {
     /// Maximum number of variables allowed in a function.
     /// Limited by number of available operand registers
-    /// in Chip-8.
+    /// in CHIP-8.
     pub const MAX_VARIABLES: usize = 15;
 
     #[inline]
     pub fn new() -> Self {
         Self {
             code: vec![],
-
-            // Initialize default global scope.
-            scopes: VecDeque::from(vec![SymbolTable::default()]),
             mask: RegisterMask::default(),
-
-            constants: vec![],
-            variables: vec![],
         }
     }
 
     #[inline]
-    pub fn compile(&mut self, unit: &CompilationUnit) -> Result<(), CompileError> {
-        self.comp_unit(unit)
+    pub fn compile(&mut self, unit: &CompilationUnit, _symbols: &SymbolTable) -> Result<Vec<u8>, CompileError> {
+        println!("std::mem::size_of::<IR>() -> {}", std::mem::size_of::<IR>());
+        self.comp_unit(unit)?;
+        Ok(assemble(&self.code))
     }
 
     #[inline]
@@ -53,29 +46,23 @@ impl CodeGen {
         todo!()
     }
 
-    fn add_const(&mut self, name: &str, value: u8) {
-        self.constants.push(Const {
-            name: SmolStr::from(name),
-            value,
-        });
-    }
-
     fn add_var(&mut self, name: &str) -> Result<Register, CompileError> {
-        if self.variables.len() > Self::MAX_VARIABLES {
-            Err(CompileError::RegisterOverflow)
-        } else {
-            // Important to reserve the register for variable
-            // usage, so it won't be cleared by expressions.
-            let register = Register {
-                usage: Usage::Var,
-                ..self.next_register()?
-            };
-            self.variables.push(Var {
-                name: SmolStr::from(name),
-                register: register.clone(),
-            });
-            Ok(register)
-        }
+        // if self.variables.len() > Self::MAX_VARIABLES {
+        //     Err(CompileError::RegisterOverflow)
+        // } else {
+        //     // Important to reserve the register for variable
+        //     // usage, so it won't be cleared by expressions.
+        //     let register = Register {
+        //         usage: Usage::Local,
+        //         ..self.next_register()?
+        //     };
+        //     self.variables.push(Var {
+        //         name: SmolStr::from(name),
+        //         register: register.clone(),
+        //     });
+        //     Ok(register)
+        // }
+        todo!()
     }
 
     fn next_register(&mut self) -> Result<Register, CompileError> {
@@ -112,10 +99,6 @@ impl CodeGen {
             self.stmt(stmt)?;
         }
 
-        Ok(())
-    }
-
-    fn comment(&mut self) -> Result<(), CompileError> {
         Ok(())
     }
 
@@ -177,21 +160,22 @@ impl CodeGen {
 
     fn const_def(&mut self, const_def: &ConstDef) -> Result<(), CompileError> {
         // TODO: RHS - const expr
-        if let Some(scope) = self.scopes.front_mut() {
-            if scope.contains_symbol(const_def.name.as_str()) {
-                Err(CompileError::SymbolExists)
-            } else {
-                scope.add_symbol(Symbol {
-                    name: const_def.name.clone(),
-                    realm: SymbolRealm::Const,
-                    // TODO: Constant type
-                    ty: SymbolType::U8,
-                });
-                Ok(())
-            }
-        } else {
-            Err(CompileError::NoScope)
-        }
+        // if let Some(scope) = self.scopes.front_mut() {
+        //     if scope.contains_symbol(const_def.name.as_str()) {
+        //         Err(CompileError::SymbolExists)
+        //     } else {
+        //         scope.add_symbol(Symbol {
+        //             name: const_def.name.clone(),
+        //             realm: SymbolRealm::Const,
+        //             // TODO: Constant type
+        //             ty: SymbolType::U8,
+        //         });
+        //         Ok(())
+        //     }
+        // } else {
+        //     Err(CompileError::NoScope)
+        // }
+        todo!()
     }
 
     fn emit_var_def(&mut self, var_def: &VarDef) -> Result<(), CompileError> {
@@ -234,7 +218,7 @@ impl CodeGen {
     #[inline]
     fn stmt(&mut self, stmt: &Stmt) -> Result<(), CompileError> {
         match stmt {
-            Stmt::Comment => self.comment(),
+            Stmt::Comment => Ok(()),
             Stmt::Const(stmt) => self.const_def(stmt),
             Stmt::Var(stmt) => self.emit_var_def(stmt),
             Stmt::Expr(expr) => self.expr_stmt(expr),
