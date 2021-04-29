@@ -1,7 +1,7 @@
 use super::{ident::Ident, literal::Literal, Parse, ParseError};
 use crate::{
     token_stream::{TokenError, TokenStream},
-    tokens::{Token, TokenKind},
+    tokens::{KeywordKind, Token, TokenKind},
 };
 use std::{convert::TryFrom, fmt, ops};
 
@@ -83,10 +83,12 @@ impl Precedence {
     /// Get the precedence of the given token type in the context
     /// of the expression parser.
     fn of(token_kind: TokenKind) -> Precedence {
+        use KeywordKind as K;
         use TokenKind as T;
 
         match token_kind {
             T::Number => Precedence::Lowest,
+            T::Keyword(K::True) | T::Keyword(K::False) => Precedence::Lowest,
             T::Plus | T::Minus => Precedence::Term,
             T::Star | T::Slash => Precedence::Factor,
             T::Eq => Precedence::Assignment,
@@ -201,6 +203,7 @@ impl Expr {
     ///
     /// This function is analogous to a parselet.
     fn parse_prefix(input: &mut TokenStream) -> Result<Expr, ParseError> {
+        use KeywordKind as K;
         use TokenKind as T;
 
         input.reset_peek();
@@ -209,6 +212,7 @@ impl Expr {
                 // Only one number type.
                 Literal::parse(input).map(Expr::Literal)
             }
+            T::Keyword(K::True) | T::Keyword(K::False) => Literal::parse(input).map(Expr::Literal),
             T::Ident => {
                 // Constant, variable or function call in expression.
                 Ok(Expr::Access(Access {

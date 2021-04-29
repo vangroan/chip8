@@ -35,6 +35,11 @@ impl Parse for Block {
                     T::Keyword(keyword) => match keyword {
                         K::Const => stmts.push(ConstDef::parse(input).map(Stmt::Const)?),
                         K::Var => stmts.push(VarDef::parse(input).map(Stmt::Var)?),
+                        _ => {
+                            return Err(ParseError::Generic {
+                                msg: format!("unexpected keyword '{}'", keyword),
+                            })
+                        }
                     },
                     T::EOS => break,
                     _ => {

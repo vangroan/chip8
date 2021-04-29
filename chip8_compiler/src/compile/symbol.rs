@@ -1,6 +1,6 @@
-use crate::parsing::Ident;
-use std::{collections::HashMap, convert::TryFrom};
 use super::Register;
+use crate::parsing::Ident;
+use std::{collections::HashMap, convert::TryFrom, fmt};
 
 #[derive(Debug)]
 pub struct Symbol {
@@ -13,8 +13,10 @@ pub struct Symbol {
 /// Static value type of the symbol known at compile time.
 ///
 /// Compiler is pretty simple so no fancy type system.
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ValueType {
+    /// The nothing type.
+    Void,
     /// One and only number type.
     U8,
     /// Zero and one can cover bools.
@@ -31,9 +33,21 @@ impl TryFrom<&Ident> for ValueType {
 
     fn try_from(ident: &Ident) -> Result<Self, Self::Error> {
         match ident.name.as_str() {
+            "void" => Ok(ValueType::Void),
             "u8" => Ok(ValueType::U8),
             "bool" => Ok(ValueType::Bool),
             _ => Err(()),
+        }
+    }
+}
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ValueType::Void => write!(f, "void"),
+            ValueType::U8 => write!(f, "u8"),
+            ValueType::Bool => write!(f, "bool"),
+            _ => todo!("type cannot be displayed yet"),
         }
     }
 }

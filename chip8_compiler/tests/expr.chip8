@@ -2,5 +2,12 @@
 // var a : u8 = 99;
 var a : u8 = 1 + 2 + 3 + 4;
 var b : u8 = 21 + 22;
+
+// type error: operator '+' cannot be applied to types 'bool' and 'u8'
+// var c : bool = true + 1;
+
+// symbol 'doesnt_exist' does not exist
 // var v : u8 = 1 + doesnt_exist;
+
+// symbol 'c' does not exist
 // var c : u8 = a + b + c;

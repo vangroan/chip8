@@ -1,5 +1,5 @@
 use super::symbol::{Symbol, SymbolKind, SymbolTable, ValueType};
-use crate::parsing::{Access, Block, CompilationUnit, ConstDef, Expr, Stmt, VarDef};
+use crate::parsing::{Access, Block, CompilationUnit, ConstDef, Expr, LitValue, Literal, Stmt, VarDef};
 use std::{
     collections::VecDeque,
     convert::{Infallible, TryFrom},
@@ -130,30 +130,48 @@ impl Mapper {
         );
     }
 
-    fn map_expr(&mut self, expr: &Expr) {
+    fn map_expr(&mut self, expr: &Expr) -> ValueType {
         match expr {
-            Expr::Access(access) => {
-                self.map_expr_access(access);
-            }
+            Expr::Access(access) => self.map_expr_access(access),
             Expr::Binary(bin) => {
-                self.map_expr(bin.lhs.as_ref());
-                self.map_expr(bin.rhs.as_ref());
+                let lhs_ty = self.map_expr(bin.lhs.as_ref());
+                let rhs_ty = self.map_expr(bin.rhs.as_ref());
+
+                // Type check.
+                if lhs_ty != rhs_ty {
+                    panic!(
+                        "type error: operator '{}' cannot be applied to types '{}' and '{}'",
+                        bin.operator.kind, lhs_ty, rhs_ty
+                    );
+                }
+
+                lhs_ty
             }
-            Expr::Unary(un) => {
-                self.map_expr(un.rhs.as_ref());
+            Expr::Unary(un) => self.map_expr(un.rhs.as_ref()),
+            Expr::Literal(literal) => self.map_expr_literal(literal),
+            Expr::NoOp => {
+                /* Ignore */
+                ValueType::Void
             }
-            Expr::NoOp | Expr::Literal(_) => { /* Ignore */ }
         }
     }
 
     /// When an expression accesses a symbol, we ensure
     /// that it has been defined.
-    fn map_expr_access(&mut self, access: &Access) {
-        if !self.check_exists(access.ident.name.as_str()) {
-            panic!("symbol '{}' does not exist", access.ident.name.as_str());
+    fn map_expr_access(&mut self, access: &Access) -> ValueType {
+        match self.lookup_symbol(access.ident.name.as_str()) {
+            Some(symbol) => symbol.ty.clone(),
+            None => panic!("symbol '{}' does not exist", access.ident.name.as_str()),
         }
 
         // TODO: Associate access with constant so bytecode emitter can inline the right value.
+    }
+
+    fn map_expr_literal(&mut self, literal: &Literal) -> ValueType {
+        match literal.value {
+            LitValue::U8(_) => ValueType::U8,
+            LitValue::Bool(_) => ValueType::Bool,
+        }
     }
 }
 

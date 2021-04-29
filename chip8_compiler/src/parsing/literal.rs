@@ -2,7 +2,7 @@
 use super::{Parse, ParseError};
 use crate::{
     token_stream::{TokenError, TokenStream},
-    tokens::{Token, TokenKind},
+    tokens::{KeywordKind, Token, TokenKind},
 };
 
 #[derive(Debug)]
@@ -14,6 +14,7 @@ pub struct Literal {
 #[derive(Debug)]
 pub enum LitValue {
     U8(u8),
+    Bool(bool),
 }
 
 impl Parse for Literal {
@@ -22,6 +23,7 @@ impl Parse for Literal {
 
     #[inline]
     fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
+        use KeywordKind as K;
         use TokenKind as T;
 
         input.reset_peek();
@@ -36,6 +38,20 @@ impl Parse for Literal {
                     .parse::<u8>()
                     .map(LitValue::U8)?;
                 Ok(Literal { token, value })
+            }
+            T::Keyword(K::True) => {
+                let token = input.consume(T::Keyword(K::True))?;
+                Ok(Literal {
+                    token,
+                    value: LitValue::Bool(true),
+                })
+            }
+            T::Keyword(K::False) => {
+                let token = input.consume(T::Keyword(K::False))?;
+                Ok(Literal {
+                    token,
+                    value: LitValue::Bool(false),
+                })
             }
             token_kind => Err(ParseError::Token(TokenError::Unexpected {
                 encountered: token_kind,

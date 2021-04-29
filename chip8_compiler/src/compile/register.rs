@@ -18,7 +18,7 @@ pub enum Usage {
     /// Register is used for evaluating an expression.
     Temp,
     /// Register is reserved by a local variable.
-    Local,
+    Reserved,
 }
 
 impl Register {

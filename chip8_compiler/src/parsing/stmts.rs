@@ -68,6 +68,11 @@ impl Parse for Stmt {
             }) => match keyword {
                 K::Const => ConstDef::parse(input).map(Stmt::Const),
                 K::Var => VarDef::parse(input).map(Stmt::Var),
+                _ => {
+                    return Err(ParseError::Generic {
+                        msg: format!("unexpected keyword '{}'", keyword),
+                    })
+                }
             },
             Ok(Token { kind, .. }) => match kind {
                 T::Comment | T::DocComment => {
