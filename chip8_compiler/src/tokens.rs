@@ -71,7 +71,9 @@ impl fmt::Display for TokenKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeywordKind {
+    False,
     Const,
+    True,
     Var,
 }
 
@@ -80,7 +82,9 @@ impl fmt::Display for KeywordKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use KeywordKind as K;
         match self {
+            K::False => write!(f, "false"),
             K::Const => write!(f, "const"),
+            K::True  => write!(f, "true"),
             K::Var   => write!(f, "var"),
         }
     }
@@ -89,11 +93,14 @@ impl fmt::Display for KeywordKind {
 impl FromStr for KeywordKind {
     type Err = ();
 
+    #[rustfmt::skip]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use KeywordKind as K;
         match s {
+            "false" => Ok(K::False),
             "const" => Ok(K::Const),
-            "var" => Ok(K::Var),
+            "true"  => Ok(K::True),
+            "var"   => Ok(K::Var),
             _ => Err(()),
         }
     }
