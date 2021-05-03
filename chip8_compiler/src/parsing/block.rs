@@ -1,4 +1,5 @@
 use super::{
+    func::FuncDef,
     stmts::{ConstDef, Stmt, VarDef},
     Parse, ParseError,
 };
@@ -33,6 +34,7 @@ impl Parse for Block {
                         continue;
                     }
                     T::Keyword(keyword) => match keyword {
+                        K::Func => stmts.push(FuncDef::parse(input).map(Stmt::Func)?),
                         K::Const => stmts.push(ConstDef::parse(input).map(Stmt::Const)?),
                         K::Var => stmts.push(VarDef::parse(input).map(Stmt::Var)?),
                         _ => {

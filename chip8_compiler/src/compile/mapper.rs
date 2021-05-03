@@ -1,5 +1,5 @@
 use super::symbol::{Symbol, SymbolKind, SymbolTable, ValueType};
-use crate::parsing::{Access, Block, CompilationUnit, ConstDef, Expr, LitValue, Literal, Stmt, VarDef};
+use crate::parsing::{Access, Block, CompilationUnit, ConstDef, Expr, FuncDef, LitValue, Literal, Stmt, VarDef};
 use std::{
     collections::VecDeque,
     convert::{Infallible, TryFrom},
@@ -87,6 +87,9 @@ impl Mapper {
                 Stmt::Expr(expr) => {
                     self.map_expr(expr);
                 }
+                Stmt::Func(func) => {
+                    self.map_func(func);
+                }
             }
         }
     }
@@ -128,6 +131,10 @@ impl Mapper {
                 ty: ValueType::try_from(ty).unwrap_or_else(|_| panic!("unknown type {}", ty)),
             },
         );
+    }
+
+    fn map_func(&mut self, _func: &FuncDef) {
+        todo!()
     }
 
     fn map_expr(&mut self, expr: &Expr) -> ValueType {

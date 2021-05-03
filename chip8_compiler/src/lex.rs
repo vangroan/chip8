@@ -71,6 +71,10 @@ impl<'a> Lexer<'a> {
                     '='               => return Ok(self.make_token(T::Eq)),
                     ':'               => return Ok(self.make_token(T::Colon)),
                     ';'               => return Ok(self.make_token(T::Semicolon)),
+                    '('               => return Ok(self.make_token(T::LeftParen)),
+                    ')'               => return Ok(self.make_token(T::RightParen)),
+                    '{'               => return Ok(self.make_token(T::LeftBrace)),
+                    '}'               => return Ok(self.make_token(T::RightBrace)),
                     ' ' | '\t' | '\r' => self.consume_whitespace(),
                     '\n'              => return Ok(self.make_token(T::Newline)),
                     '/'               => {

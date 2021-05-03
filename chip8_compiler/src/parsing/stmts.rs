@@ -1,5 +1,5 @@
 //! Statement parsing.
-use super::{expr::Expr, ident::Ident, Parse, ParseError};
+use super::{expr::Expr, func::FuncDef, ident::Ident, Parse, ParseError};
 use crate::{
     token_stream::{TokenError, TokenStream},
     tokens::{KeywordKind, Token, TokenKind},
@@ -14,6 +14,8 @@ pub enum Stmt {
     Var(VarDef),
     /// Expression Statements
     Expr(Expr),
+    /// Function definition
+    Func(FuncDef),
 }
 
 /// Definition of constant value.

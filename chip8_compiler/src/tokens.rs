@@ -24,6 +24,11 @@ pub enum TokenKind {
     Colon,      // `:`
     Semicolon,  // `;`
 
+    LeftParen,  // (
+    RightParen, // )
+    LeftBrace,  // {
+    RightBrace, // }
+
     /// Number Literal
     Number,
 
@@ -60,6 +65,10 @@ impl fmt::Display for TokenKind {
             T::DocComment => write!(f, "doc-comment"),
             T::Colon      => write!(f, ":"),
             T::Semicolon  => write!(f, ";"),
+            T::LeftParen  => write!(f, "("),
+            T::RightParen => write!(f, ")"),
+            T::LeftBrace  => write!(f, "{{"),
+            T::RightBrace => write!(f, "}}"),
             T::Number     => write!(f, "number"),
             T::Newline    => write!(f, "newline"),
             T::Ident      => write!(f, "ident"),
@@ -72,6 +81,7 @@ impl fmt::Display for TokenKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeywordKind {
     False,
+    Func,
     Const,
     True,
     Var,
@@ -83,6 +93,7 @@ impl fmt::Display for KeywordKind {
         use KeywordKind as K;
         match self {
             K::False => write!(f, "false"),
+            K::Func  => write!(f, "func"),
             K::Const => write!(f, "const"),
             K::True  => write!(f, "true"),
             K::Var   => write!(f, "var"),
@@ -98,6 +109,7 @@ impl FromStr for KeywordKind {
         use KeywordKind as K;
         match s {
             "false" => Ok(K::False),
+            "func"  => Ok(K::Func),
             "const" => Ok(K::Const),
             "true"  => Ok(K::True),
             "var"   => Ok(K::Var),

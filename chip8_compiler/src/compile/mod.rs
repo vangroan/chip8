@@ -9,7 +9,7 @@ use register::{Register, RegisterMask, Usage};
 pub use symbol::{Symbol, SymbolKind, SymbolTable, ValueType};
 
 use crate::{
-    parsing::{Block, CompilationUnit, ConstDef, Expr, LitValue, Literal, Stmt, VarDef},
+    parsing::{Block, CompilationUnit, ConstDef, Expr, FuncDef, LitValue, Literal, Stmt, VarDef},
     tokens::TokenKind,
 };
 use smol_str::SmolStr;
@@ -17,7 +17,13 @@ use std::{error, fmt};
 
 pub struct CodeGen {
     pub code: Vec<IR>,
+    /// Mask to track which of the 15
+    /// operand registers are occupied.
     pub mask: RegisterMask,
+    /// Symbols contain information like
+    /// types and reserved registers for
+    /// variables.
+    pub symbols: SymbolTable,
 }
 
 impl CodeGen {
@@ -31,13 +37,14 @@ impl CodeGen {
         Self {
             code: vec![],
             mask: RegisterMask::default(),
+            symbols: SymbolTable::default(),
         }
     }
 
     #[inline]
     pub fn compile(&mut self, unit: &CompilationUnit, _symbols: &SymbolTable) -> Result<Vec<u8>, CompileError> {
         println!("std::mem::size_of::<IR>() -> {}", std::mem::size_of::<IR>());
-        self.comp_unit(unit)?;
+        self.emit_comp_unit(unit)?;
         Ok(assemble(&self.code))
     }
 
@@ -89,14 +96,14 @@ impl Default for CodeGen {
 
 impl CodeGen {
     #[inline]
-    fn comp_unit(&mut self, unit: &CompilationUnit) -> Result<(), CompileError> {
-        self.block(&unit.block)
+    fn emit_comp_unit(&mut self, unit: &CompilationUnit) -> Result<(), CompileError> {
+        self.emit_block(&unit.block)
     }
 
     #[inline]
-    fn block(&mut self, block: &Block) -> Result<(), CompileError> {
+    fn emit_block(&mut self, block: &Block) -> Result<(), CompileError> {
         for stmt in &block.stmts {
-            self.stmt(stmt)?;
+            self.emit_stmt(stmt)?;
         }
 
         Ok(())
@@ -150,12 +157,11 @@ impl CodeGen {
     ///
     /// If the source register is temporary, it will be
     /// freed in the mask.
-    fn emit_move(&mut self, src: &Register, dest: &Register) -> Result<(), CompileError> {
+    fn emit_move(&mut self, src: &Register, dest: &Register) {
         self.emit(IR::Assign(dest.id, src.id));
         if src.is_temp() {
             self.mask.remove(src.id);
         }
-        Ok(())
     }
 
     fn const_def(&mut self, const_def: &ConstDef) -> Result<(), CompileError> {
@@ -209,19 +215,24 @@ impl CodeGen {
         // TODO: We can save on one register if we manage to reuse
         //       the variable's register for the expression's result.
         if r != vx {
-            self.emit_move(&vx, &r)?;
+            self.emit_move(&vx, &r);
         }
 
         Ok(())
     }
 
+    fn emit_func_def(&mut self, _func: &FuncDef) -> Result<(), CompileError> {
+        todo!()
+    }
+
     #[inline]
-    fn stmt(&mut self, stmt: &Stmt) -> Result<(), CompileError> {
+    fn emit_stmt(&mut self, stmt: &Stmt) -> Result<(), CompileError> {
         match stmt {
             Stmt::Comment => Ok(()),
             Stmt::Const(stmt) => self.const_def(stmt),
             Stmt::Var(stmt) => self.emit_var_def(stmt),
             Stmt::Expr(expr) => self.expr_stmt(expr),
+            Stmt::Func(func) => self.emit_func_def(func),
         }
     }
 

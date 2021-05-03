@@ -1,6 +1,7 @@
 use super::{
     block::Block,
     expr::Expr,
+    func::FuncDef,
     stmts::{ConstDef, Stmt, VarDef},
     unit::CompilationUnit,
 };
@@ -12,6 +13,7 @@ pub trait AstVisitor {
     fn expr(&mut self, expr: &Expr) -> Self::Output;
     fn const_def(&mut self, stmt: &ConstDef) -> Self::Output;
     fn var_def(&mut self, stmt: &VarDef) -> Self::Output;
+    fn func_def(&mut self, stmt: &FuncDef) -> Self::Output;
 
     #[inline]
     fn comp_unit(&mut self, unit: &CompilationUnit) -> Self::Output {
@@ -25,6 +27,7 @@ pub trait AstVisitor {
             Stmt::Const(stmt) => self.const_def(stmt),
             Stmt::Var(stmt) => self.var_def(stmt),
             Stmt::Expr(expr) => self.expr_stmt(expr),
+            Stmt::Func(func) => self.func_def(func),
         }
     }
 

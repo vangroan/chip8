@@ -1,5 +1,6 @@
 mod block;
 mod expr;
+mod func;
 mod ident;
 mod literal;
 mod stmts;
@@ -8,6 +9,7 @@ mod visitor;
 
 pub use block::*;
 pub use expr::*;
+pub use func::*;
 pub use ident::*;
 pub use literal::*;
 pub use stmts::*;
