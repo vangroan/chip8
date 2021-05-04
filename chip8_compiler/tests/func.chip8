@@ -5,7 +5,7 @@ func foo() {}
 
 /// Functions can be overloaded, reusing the name
 /// as long as the signature is different.
-// func foo(a: u8) {}
+func foo(a: u8, b: u8) {}
 
 /// Function that returns nothing implicitly
 /// has the `void` return type. It can be

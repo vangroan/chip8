@@ -1,4 +1,5 @@
 mod block;
+mod delim;
 mod expr;
 mod func;
 mod ident;
@@ -8,6 +9,7 @@ mod unit;
 mod visitor;
 
 pub use block::*;
+pub use delim::*;
 pub use expr::*;
 pub use func::*;
 pub use ident::*;

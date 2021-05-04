@@ -19,6 +19,8 @@ pub enum TokenKind {
     GreaterEq,  // `>=`
     LesserEq,   // `<=`
     Arrow,      // `->`
+    Comma,      // `,`
+    Dot,        // `.`
     Comment,    // `//`
     DocComment, // `///`
     Colon,      // `:`
@@ -61,6 +63,8 @@ impl fmt::Display for TokenKind {
             T::GreaterEq  => write!(f, ">="),
             T::LesserEq   => write!(f, "<="),
             T::Arrow      => write!(f, "->"),
+            T::Comma      => write!(f, ","),
+            T::Dot        => write!(f, "."),
             T::Comment    => write!(f, "comment"),
             T::DocComment => write!(f, "doc-comment"),
             T::Colon      => write!(f, ":"),

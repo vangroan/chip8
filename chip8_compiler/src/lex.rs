@@ -69,6 +69,8 @@ impl<'a> Lexer<'a> {
                     },
                     '*'               => return Ok(self.make_token(T::Star)),
                     '='               => return Ok(self.make_token(T::Eq)),
+                    ','               => return Ok(self.make_token(T::Comma)),
+                    '.'               => return Ok(self.make_token(T::Dot)),
                     ':'               => return Ok(self.make_token(T::Colon)),
                     ';'               => return Ok(self.make_token(T::Semicolon)),
                     '('               => return Ok(self.make_token(T::LeftParen)),
@@ -258,7 +260,7 @@ impl<'a> SourceText<'a> {
     fn next_char(&mut self) -> Option<(usize, char)> {
         if let Some((index, c)) = self.source.next() {
             if c == '\n' {
-                self.current_column += 1;
+                self.current_column = 0;
                 self.current_line += 1;
             } else {
                 self.current_column += 1;
