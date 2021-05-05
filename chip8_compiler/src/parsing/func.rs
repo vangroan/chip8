@@ -1,4 +1,5 @@
 use super::{
+    block::Block,
     delim::{Comma, Delimited},
     ident::Ident,
     Parse, ParseError,
@@ -10,13 +11,17 @@ use crate::{
 
 #[derive(Debug)]
 pub struct FuncDef {
-    keyword: Token,
-    ident: Ident,
-    left_parent: Token,
-    args: Delimited<ArgDef, Comma>,
-    right_parent: Token,
-    left_brace: Token,
-    right_brace: Token,
+    pub keyword: Token,
+    pub sig: FuncSig,
+    pub body: FuncBody,
+}
+
+#[derive(Debug)]
+pub struct FuncSig {
+    pub ident: Ident,
+    pub left_paren: Token,
+    pub args: Delimited<ArgDef, Comma>,
+    pub right_paren: Token,
 }
 
 #[derive(Debug)]
@@ -26,32 +31,41 @@ pub struct ArgDef {
     pub ty: Ident,
 }
 
+#[derive(Debug)]
+pub struct FuncBody {
+    pub left_brace: Token,
+    pub block: Block,
+    pub right_brace: Token,
+}
+
 impl Parse for FuncDef {
     type Output = Self;
     type Err = ParseError;
 
     fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
-        use KeywordKind as K;
-        use TokenKind as T;
+        let keyword = input.consume(TokenKind::Keyword(KeywordKind::Func))?;
+        let sig = FuncSig::parse(input)?;
+        let body = FuncBody::parse(input)?;
 
-        let keyword = input.consume(T::Keyword(K::Func))?;
+        Ok(Self { keyword, sig, body })
+    }
+}
+
+impl Parse for FuncSig {
+    type Output = Self;
+    type Err = ParseError;
+
+    fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
         let ident = Ident::parse(input)?;
-        let left_parent = input.consume(T::LeftParen)?;
+        let left_paren = input.consume(TokenKind::LeftParen)?;
         let args = Delimited::<ArgDef, Comma>::parse(input)?;
-        let right_parent = input.consume(T::RightParen)?;
+        let right_paren = input.consume(TokenKind::RightParen)?;
 
-        let left_brace = input.consume(T::LeftBrace)?;
-        // TODO: Function body block
-        let right_brace = input.consume(T::RightBrace)?;
-
-        Ok(Self {
-            keyword,
+        Ok(FuncSig {
             ident,
-            left_parent,
+            left_paren,
             args,
-            right_parent,
-            left_brace,
-            right_brace,
+            right_paren,
         })
     }
 }
@@ -73,6 +87,23 @@ impl Parse for ArgDef {
                 ty: Ident::parse(input)?,
             }),
             _ => None,
+        })
+    }
+}
+
+impl Parse for FuncBody {
+    type Output = Self;
+    type Err = ParseError;
+
+    fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
+        let left_brace = input.consume(TokenKind::LeftBrace)?;
+        let block = Block::parse(input)?;
+        let right_brace = input.consume(TokenKind::RightBrace)?;
+
+        Ok(FuncBody {
+            left_brace,
+            block,
+            right_brace,
         })
     }
 }

@@ -7,6 +7,12 @@ func foo() {}
 /// as long as the signature is different.
 func foo(a: u8, b: u8) {}
 
+func foo(a: u8, b: u8, c: u8) {
+    // Functions can declare local variables.
+    var d: u8;
+    var e: u8 = 1 + 2;
+}
+
 /// Function that returns nothing implicitly
 /// has the `void` return type. It can be
 /// explicitly specified.

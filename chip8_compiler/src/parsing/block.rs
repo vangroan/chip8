@@ -43,6 +43,7 @@ impl Parse for Block {
                             })
                         }
                     },
+                    T::RightBrace => break,
                     T::EOS => break,
                     _ => {
                         // Expression statement
