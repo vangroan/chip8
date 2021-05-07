@@ -7,6 +7,10 @@ func foo() {}
 /// as long as the signature is different.
 func foo(a: u8, b: u8) {}
 
+// If another function used the same name, argument types
+// and return type, the sybol mapping would fail.
+// func foo(a: u8, b: u8) {}
+
 func foo(a: u8, b: u8, c: u8) {
     // Functions can declare local variables.
     var d: u8;

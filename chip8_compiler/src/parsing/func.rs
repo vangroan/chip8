@@ -22,6 +22,7 @@ pub struct FuncSig {
     pub left_paren: Token,
     pub args: Delimited<ArgDef, Comma>,
     pub right_paren: Token,
+    // TODO: Return type
 }
 
 #[derive(Debug)]

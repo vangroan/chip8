@@ -1,5 +1,5 @@
 use super::symbol::{Symbol, SymbolKind, SymbolTable, ValueType};
-use crate::parsing::{Access, Block, CompilationUnit, ConstDef, Expr, FuncDef, LitValue, Literal, Stmt, VarDef};
+use crate::parsing::{Access, Block, CompilationUnit, ConstDef, Expr, FuncDef, FuncSig, LitValue, Literal, Stmt, VarDef};
 use std::{
     collections::VecDeque,
     convert::{Infallible, TryFrom},
@@ -88,7 +88,7 @@ impl Mapper {
                     self.map_expr(expr);
                 }
                 Stmt::Func(func) => {
-                    self.map_func(func);
+                    self.map_func_def(func);
                 }
             }
         }
@@ -128,13 +128,42 @@ impl Mapper {
             Symbol {
                 name: var_def.name.clone(),
                 kind: SymbolKind::Var,
-                ty: ValueType::try_from(ty).unwrap_or_else(|_| panic!("unknown type {}", ty)),
+                ty: ValueType::try_from(ty).unwrap_or_else(|_| panic!("unknown type '{}'", ty)),
             },
         );
     }
 
-    fn map_func(&mut self, _func: &FuncDef) {
-        todo!()
+    fn map_func_def(&mut self, func: &FuncDef) {
+        let FuncDef {
+            sig: FuncSig { ident, args, .. },
+            ..
+        } = func;
+
+        let arity = args
+            .items
+            .iter()
+            .map(|delim| &delim.item.ty)
+            .map(|ty_ident| ValueType::try_from(ty_ident).unwrap_or_else(|_| panic!("unknown type '{}'", ty_ident)))
+            .collect::<Vec<_>>();
+
+        let symbol = Symbol {
+            name: ident.name.to_string(),
+            kind: SymbolKind::Function(arity),
+            // TODO: Return type
+            ty: ValueType::Void,
+        };
+
+        // Build a unique key for the function.
+        let mut key = String::new();
+        symbol.to_func_sig(&mut key).unwrap();
+
+        // Check whether a function with this name, arguments
+        // and return type has already been declared.
+        if self.lookup_symbol(key.as_str()).is_some() {
+            panic!("function already defined: '{}'", key);
+        }
+
+        self.current.as_mut().unwrap().funcs.insert(key, symbol);
     }
 
     fn map_expr(&mut self, expr: &Expr) -> ValueType {

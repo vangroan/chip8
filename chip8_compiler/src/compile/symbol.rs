@@ -10,6 +10,34 @@ pub struct Symbol {
     pub ty: ValueType,
 }
 
+impl Symbol {
+    /// Build a unique function signature string.
+    #[inline]
+    pub fn to_func_sig<W: fmt::Write>(&self, f: &mut W) -> fmt::Result {
+        match self.kind {
+            SymbolKind::Function(ref args) => {
+                write!(f, "{}", &self.name)?;
+                write!(f, "(")?;
+
+                for (idx, arg_ty) in args.iter().enumerate() {
+                    if idx == args.len() - 1 {
+                        write!(f, "{}", arg_ty)?;
+                    } else {
+                        write!(f, "{},", arg_ty)?;
+                    }
+                }
+
+                write!(f, ")")?;
+                write!(f, "->")?;
+                write!(f, "{}", self.ty)?;
+
+                Ok(())
+            }
+            _ => Err(fmt::Error),
+        }
+    }
+}
+
 /// Static value type of the symbol known at compile time.
 ///
 /// Compiler is pretty simple so no fancy type system.
@@ -60,7 +88,15 @@ pub enum SymbolKind {
     /// Assigned a register of its own, unique in its
     /// containing function scope.
     Var,
-    Function,
+    /// Function with list of arguments.
+    Function(Vec<ValueType>),
+}
+
+impl SymbolKind {
+    #[inline]
+    pub fn is_func(&self) -> bool {
+        matches!(self, SymbolKind::Function(_))
+    }
 }
 
 #[derive(Debug)]
