@@ -88,10 +88,12 @@ impl Precedence {
 
         match token_kind {
             T::Number => Precedence::Lowest,
+            T::Ident => Precedence::Lowest,
             T::Keyword(K::True) | T::Keyword(K::False) => Precedence::Lowest,
             T::Plus | T::Minus => Precedence::Term,
             T::Star | T::Slash => Precedence::Factor,
             T::Eq => Precedence::Assignment,
+            T::LeftParen | T::RightParen => Precedence::Call,
             _ => Precedence::None,
         }
     }

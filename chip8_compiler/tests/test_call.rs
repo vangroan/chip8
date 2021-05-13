@@ -1,37 +1,37 @@
 use chip8_compiler::{
     compile::{CodeGen, Mapper},
     lex::{debug_print_lexer, Lexer},
-    parsing::{CompilationUnit, Parse, Prog},
+    parsing::{CompilationUnit, Parse},
     token_stream::TokenStream,
 };
 
-const SOURCE: &str = include_str!("expr.chip8");
+const SOURCE: &str = include_str!("call.chip8");
 
 #[test]
-fn test_lex_expr() {
+fn test_lex_call() {
     let lexer = Lexer::new(SOURCE);
     debug_print_lexer(lexer);
 }
 
 #[test]
-fn test_parse_expr() {
+fn test_parse_call() {
     let lexer = Lexer::new(SOURCE);
     let mut stream = TokenStream::new(lexer);
-    let ast = Prog::parse(&mut stream).unwrap();
-    println!("{:#?}", ast);
+    let tree = CompilationUnit::parse(&mut stream).unwrap();
+    println!("{:#?}", tree);
 }
 
 #[test]
-fn test_mapper_expr() {
+fn test_mapper_call() {
     let lexer = Lexer::new(SOURCE);
     let mut stream = TokenStream::new(lexer);
-    let ast = Prog::parse(&mut stream).unwrap();
-    // let symbols = Mapper::new().build_symbols(&ast).unwrap();
+    let tree = CompilationUnit::parse(&mut stream).unwrap();
+    let symbols = Mapper::new().build_symbols(&tree).unwrap();
     println!("{:#?}", symbols);
 }
 
 #[test]
-fn test_compile_expr() {
+fn test_compile_call() {
     let lexer = Lexer::new(SOURCE);
     let mut stream = TokenStream::new(lexer);
     let tree = CompilationUnit::parse(&mut stream).unwrap();

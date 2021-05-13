@@ -1,4 +1,5 @@
 use super::{
+    expr::Expr,
     func::FuncDef,
     stmts::{ConstDef, Stmt, VarDef},
     Parse, ParseError,
@@ -47,8 +48,8 @@ impl Parse for Block {
                     T::EOS => break,
                     _ => {
                         // Expression statement
-                        // stmts.push(Expr::parse(input).map());
-                        input.next_token();
+                        stmts.push(Expr::parse(input).map(Stmt::Expr)?);
+                        // input.next_token();
                     }
                 },
                 Err(TokenError::EndOfSource) => break,

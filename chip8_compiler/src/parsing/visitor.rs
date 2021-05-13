@@ -23,7 +23,7 @@ pub trait AstVisitor {
     #[inline]
     fn stmt(&mut self, stmt: &Stmt) -> Self::Output {
         match stmt {
-            Stmt::Comment => self.comment(),
+            Stmt::Comment(_) => self.comment(),
             Stmt::Const(stmt) => self.const_def(stmt),
             Stmt::Var(stmt) => self.var_def(stmt),
             Stmt::Expr(expr) => self.expr_stmt(expr),

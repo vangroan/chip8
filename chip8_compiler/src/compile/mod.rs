@@ -228,7 +228,7 @@ impl CodeGen {
     #[inline]
     fn emit_stmt(&mut self, stmt: &Stmt) -> Result<(), CompileError> {
         match stmt {
-            Stmt::Comment => Ok(()),
+            Stmt::Comment(_) => Ok(()),
             Stmt::Const(stmt) => self.const_def(stmt),
             Stmt::Var(stmt) => self.emit_var_def(stmt),
             Stmt::Expr(expr) => self.expr_stmt(expr),

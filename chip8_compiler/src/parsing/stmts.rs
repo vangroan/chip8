@@ -1,14 +1,24 @@
 //! Statement parsing.
-use super::{expr::Expr, func::FuncDef, ident::Ident, Parse, ParseError};
+use super::{comment::Comment, expr::Expr, func::FuncDef, ident::Ident, Parse, ParseError};
 use crate::{
     token_stream::{TokenError, TokenStream},
     tokens::{KeywordKind, Token, TokenKind},
     trivia::SyntaxTrivia,
 };
 
+/// Definition statements are found at the top level of a program.
+#[derive(Debug)]
+pub enum DefStmt {
+    /// Function definition
+    Func(FuncDef),
+    Stmt(Stmt),
+}
+
+/// Statements are found at the top level of a program, function bodies
+/// and blocks.
 #[derive(Debug)]
 pub enum Stmt {
-    Comment,
+    Comment(Comment),
     Const(ConstDef),
     /// Variable definition
     Var(VarDef),
@@ -55,6 +65,30 @@ pub struct DefTy {
     pub ty: Ident,
 }
 
+impl Parse for DefStmt {
+    type Output = Self;
+    type Err = ParseError;
+
+    fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
+        use KeywordKind as K;
+        use TokenKind as T;
+
+        input.reset_peek();
+
+        match input.peek() {
+            Ok(token) => match token.kind {
+                T::Keyword(keyword) => match keyword {
+                    K::Func => FuncDef::parse(input).map(DefStmt::Func),
+                    _ => Stmt::parse(input).map(DefStmt::Stmt),
+                },
+                _ => Stmt::parse(input).map(DefStmt::Stmt),
+            },
+            Err(TokenError::EndOfSource) => panic!("unexpected end-of-source"),
+            _ => panic!(),
+        }
+    }
+}
+
 impl Parse for Stmt {
     type Output = Self;
     type Err = ParseError;
@@ -62,6 +96,8 @@ impl Parse for Stmt {
     fn parse(input: &mut TokenStream) -> Result<Self, ParseError> {
         use KeywordKind as K;
         use TokenKind as T;
+
+        input.reset_peek();
 
         let result = match input.peek() {
             Ok(Token {
@@ -79,7 +115,9 @@ impl Parse for Stmt {
             Ok(Token { kind, .. }) => match kind {
                 T::Comment | T::DocComment => {
                     // TODO: Comment token in returned statement node.
-                    Ok(Stmt::Comment)
+                    // input.next_token();
+                    // Ok(Stmt::Comment)
+                    Comment::parse(input).map(Stmt::Comment)
                 }
                 _ => panic!("unexpected token: {:?}", kind),
             },

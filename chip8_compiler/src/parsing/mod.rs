@@ -1,19 +1,23 @@
 mod block;
+mod comment;
 mod delim;
 mod expr;
 mod func;
 mod ident;
 mod literal;
+mod prog;
 mod stmts;
 mod unit;
 mod visitor;
 
 pub use block::*;
+pub use comment::*;
 pub use delim::*;
 pub use expr::*;
 pub use func::*;
 pub use ident::*;
 pub use literal::*;
+pub use prog::*;
 pub use stmts::*;
 pub use unit::*;
 pub use visitor::*;

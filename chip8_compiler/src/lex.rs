@@ -62,6 +62,7 @@ impl<'a> Lexer<'a> {
                     '+'               => return Ok(self.make_token(T::Plus)),
                     '-'               => {
                         if let Some((_, '>')) = self.source.peek_char() {
+                            self.source.next_char();
                             return Ok(self.make_token(T::Arrow))
                         } else {
                             return Ok(self.make_token(T::Minus))

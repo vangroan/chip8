@@ -77,7 +77,7 @@ impl Mapper {
     fn map_block(&mut self, block: &Block) {
         for stmt in &block.stmts {
             match stmt {
-                Stmt::Comment => { /* Ignore */ }
+                Stmt::Comment(_) => { /* Ignore */ }
                 Stmt::Const(def) => {
                     self.map_const_def(def);
                 }

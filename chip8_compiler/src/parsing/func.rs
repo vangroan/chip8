@@ -22,13 +22,19 @@ pub struct FuncSig {
     pub left_paren: Token,
     pub args: Delimited<ArgDef, Comma>,
     pub right_paren: Token,
-    // TODO: Return type
+    pub rtn: Option<RtnDef>,
 }
 
 #[derive(Debug)]
 pub struct ArgDef {
     pub name: Ident,
     pub colon: Token,
+    pub ty: Ident,
+}
+
+#[derive(Debug)]
+pub struct RtnDef {
+    pub arrow: Token,
     pub ty: Ident,
 }
 
@@ -61,12 +67,14 @@ impl Parse for FuncSig {
         let left_paren = input.consume(TokenKind::LeftParen)?;
         let args = Delimited::<ArgDef, Comma>::parse(input)?;
         let right_paren = input.consume(TokenKind::RightParen)?;
+        let rtn = RtnDef::parse(input)?;
 
         Ok(FuncSig {
             ident,
             left_paren,
             args,
             right_paren,
+            rtn,
         })
     }
 }
@@ -89,6 +97,21 @@ impl Parse for ArgDef {
             }),
             _ => None,
         })
+    }
+}
+
+impl Parse for RtnDef {
+    type Output = Option<Self>;
+    type Err = ParseError;
+
+    fn parse(input: &mut TokenStream) -> Result<Option<Self>, ParseError> {
+        match input.consume(TokenKind::Arrow) {
+            Ok(arrow) => {
+                let ty = Ident::parse(input)?;
+                Ok(Some(RtnDef { arrow, ty }))
+            }
+            Err(_) => Ok(None),
+        }
     }
 }
 
