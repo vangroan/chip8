@@ -23,7 +23,7 @@ pub use unit::*;
 pub use visitor::*;
 
 use crate::token_stream::{TokenError, TokenStream};
-use std::{error::Error, fmt, num::ParseIntError};
+use std::{error::Error, fmt, fmt::Write as FmtWrite, num::ParseIntError};
 
 pub trait Parse: Sized {
     type Output;
@@ -38,6 +38,14 @@ pub enum ParseError {
     Generic { msg: String },
     Token(TokenError),
     Int(ParseIntError),
+}
+
+impl ParseError {
+    pub fn pretty_print<W: FmtWrite>(&self, writer: &mut W) {
+        // TODO: Print file path, line and column
+        // TODO: Print source line
+        // TODO: Print arrow pointing at character
+    }
 }
 
 impl Error for ParseError {}

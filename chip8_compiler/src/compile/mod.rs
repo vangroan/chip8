@@ -1,3 +1,5 @@
+mod codegen;
+mod consteval;
 mod ir;
 mod mapper;
 mod register;
@@ -5,7 +7,7 @@ mod symbol;
 
 pub use ir::{assemble, IR};
 pub use mapper::Mapper;
-use register::{Register, RegisterMask, Usage};
+use register::{Register, RegisterMask};
 pub use symbol::{Symbol, SymbolKind, SymbolTable, ValueType};
 
 use crate::{
@@ -259,6 +261,11 @@ pub enum CompileError {
     NoScope,
     RegisterOverflow,
     SymbolExists,
+    SymbolDoesNotExist,
+    NotConst,
+    ConstEval,
+    UnsupportOperation,
+    TypeError,
 }
 
 impl error::Error for CompileError {}

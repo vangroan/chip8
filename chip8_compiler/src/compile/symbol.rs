@@ -83,7 +83,7 @@ impl fmt::Display for ValueType {
 #[derive(Debug)]
 pub enum SymbolKind {
     /// Constants have a value fixed at compile time.
-    Const,
+    Const(ConstValue),
     /// Variables can change value during runtime.
     /// Assigned a register of its own, unique in its
     /// containing function scope.
@@ -94,8 +94,29 @@ pub enum SymbolKind {
 
 impl SymbolKind {
     #[inline]
+    pub fn is_const(&self) -> bool {
+        matches!(self, SymbolKind::Const(_))
+    }
+
+    #[inline]
     pub fn is_func(&self) -> bool {
         matches!(self, SymbolKind::Function(_))
+    }
+}
+
+/// Concrete value of a constant symbol
+/// that was evaluated at runtime.
+#[derive(Debug, Clone)]
+pub enum ConstValue {
+    U8(u8),
+    Bool(bool),
+}
+
+impl ConstValue {
+    /// Checks whether the two constant values are
+    /// of the same enum variant.
+    pub fn variant_eq(a: &Self, b: &Self) -> bool {
+        std::mem::discriminant(a) == std::mem::discriminant(b)
     }
 }
 
@@ -106,6 +127,7 @@ pub enum SymbolScope {
     Parameter,
 }
 
+// TODO: rename to Scope
 #[derive(Debug, Default)]
 pub struct SymbolTable {
     pub var_count: usize,

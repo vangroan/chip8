@@ -27,7 +27,7 @@ fn test_mapper_expr() {
     let mut stream = TokenStream::new(lexer);
     let ast = Prog::parse(&mut stream).unwrap();
     // let symbols = Mapper::new().build_symbols(&ast).unwrap();
-    println!("{:#?}", symbols);
+    println!("{:#?}", ast);
 }
 
 #[test]

@@ -50,6 +50,13 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// File path if the source was loaded from a file.
+    /// Would be `None` if the source was loaded from memory.
+    #[inline]
+    pub fn file_path(&self) -> Option<&str> {
+        self.source.file_path.as_deref()
+    }
+
     #[rustfmt::skip]
     pub fn next_token(&mut self) -> Result<Token, LexError> {
         use TokenKind as T;
@@ -203,7 +210,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-/// Implement `Lexer` as an interator for consuming
+/// Implement `Lexer` as an iterator for consuming
 /// tokens lazily.
 impl<'a> Iterator for Lexer<'a> {
     type Item = Result<Token, LexError>;
@@ -239,6 +246,10 @@ pub(crate) struct SourceText<'a> {
     current: (usize, char),
     current_line: usize,
     current_column: usize,
+
+    /// File path if the source was loaded from a file.
+    /// Would be `None` if the source was loaded from memory.
+    file_path: Option<String>,
 }
 
 impl<'a> SourceText<'a> {
@@ -249,6 +260,14 @@ impl<'a> SourceText<'a> {
             current: (0, '\0'),
             current_line: 1,
             current_column: 1,
+            file_path: None,
+        }
+    }
+
+    fn with_file_info(file_path: &str, source: &'a str) -> Self {
+        Self {
+            file_path: Some(file_path.to_owned()),
+            ..SourceText::new(source)
         }
     }
 

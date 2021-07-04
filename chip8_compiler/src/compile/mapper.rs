@@ -1,4 +1,5 @@
 use super::symbol::{Symbol, SymbolKind, SymbolTable, ValueType};
+use crate::compile::symbol::ConstValue;
 use crate::parsing::{Access, Block, CompilationUnit, ConstDef, Expr, FuncDef, FuncSig, LitValue, Literal, Stmt, VarDef};
 use std::{
     collections::VecDeque,
@@ -9,6 +10,7 @@ use std::{
 ///
 /// This task could be done by the code generator, but doing
 /// it in its own pass is more readable.
+// TODO: Rename to SymbolTable
 pub struct Mapper {
     /// Current scope that's being mapped.
     current: Option<SymbolTable>,
@@ -32,6 +34,12 @@ impl Mapper {
         }
     }
 
+    /// Clear the internal state of the symbol table so it can be reused.
+    pub fn reset(&mut self) {
+        self.current = Some(SymbolTable::default());
+        self.stack.clear();
+    }
+
     /// Takes the built symbol table and replaces it with an empty global table.
     #[inline]
     fn take_symbols(&mut self) -> SymbolTable {
@@ -46,7 +54,7 @@ impl Mapper {
     ///
     /// This should result in the effect of blocks having access
     /// to their parent scopes, but not their siblings.
-    fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
+    pub fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
         // First check the current scope
         self.current
             .iter()
@@ -59,15 +67,33 @@ impl Mapper {
             })
     }
 
+    /// Insert the given symbol into the currently active scope.
+    ///
+    /// If a symbol with the given name already exists, it will be
+    /// replaced and returned. Otherwise return `None`.
+    pub fn insert_symbol(&mut self, name: &str, sym: Symbol) -> Option<Symbol> {
+        if let Some(ref mut scope) = self.current {
+            match sym.kind {
+                SymbolKind::Const(_) => scope.consts.insert(name.to_owned(), sym),
+                SymbolKind::Var => scope.vars.insert(name.to_owned(), sym),
+                SymbolKind::Function(_) => scope.funcs.insert(name.to_owned(), sym),
+            }
+        } else {
+            None
+        }
+    }
+
     /// Lookup the given symbol name according to the scope rules.
     ///
     /// Returns `true` if the symbol is found.
-    fn check_exists(&self, name: &str) -> bool {
+    #[inline]
+    pub fn check_exists(&self, name: &str) -> bool {
         self.lookup_symbol(name).is_some()
     }
 }
 
 // Visitor
+#[deprecated]
 impl Mapper {
     pub fn build_symbols(&mut self, tree: &CompilationUnit) -> Result<SymbolTable, Infallible> {
         self.map_block(&tree.block);
@@ -106,7 +132,7 @@ impl Mapper {
             const_def.name.clone(),
             Symbol {
                 name: const_def.name.clone(),
-                kind: SymbolKind::Const,
+                kind: SymbolKind::Const(ConstValue::U8(0)),
                 ty: ValueType::try_from(&const_def.ty.ty).unwrap_or_else(|_| panic!("unknown type {}", const_def.ty.ty)),
             },
         );
