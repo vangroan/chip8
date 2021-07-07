@@ -1,0 +1,4 @@
+
+func array_test() {
+    var arr: [u8] = [1, 2, 3, 4];
+}

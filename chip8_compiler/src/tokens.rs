@@ -1,0 +1,136 @@
+use std::{fmt, str::FromStr};
+
+#[derive(Debug)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenKind {
+    Plus,       // `+`
+    Minus,      // `-`
+    Star,       // `*`
+    Slash,      // `/`
+    Eq,         // `=`
+    EqEq,       // `==`
+    Greater,    // `>`
+    Lesser,     // `<`
+    GreaterEq,  // `>=`
+    LesserEq,   // `<=`
+    Arrow,      // `->`
+    Comma,      // `,`
+    Dot,        // `.`
+    Comment,    // `//`
+    DocComment, // `///`
+    Colon,      // `:`
+    Semicolon,  // `;`
+
+    LeftParen,  // (
+    RightParen, // )
+    LeftBrace,  // {
+    RightBrace, // }
+
+    /// Number Literal
+    Number,
+
+    /// Newline character, used for syntax trivia.
+    Newline,
+
+    Ident,
+
+    /// Identifier  in the set of reserved words.
+    Keyword(KeywordKind),
+
+    /// End-of-source
+    EOS,
+}
+
+impl fmt::Display for TokenKind {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TokenKind as T;
+
+        match self {
+            T::Plus       => write!(f, "+"),
+            T::Minus      => write!(f, "-"),
+            T::Star       => write!(f, "*"),
+            T::Eq         => write!(f, "="),
+            T::EqEq       => write!(f, "=="),
+            T::Slash      => write!(f, "/"),
+            T::Greater    => write!(f, ">"),
+            T::Lesser     => write!(f, "<"),
+            T::GreaterEq  => write!(f, ">="),
+            T::LesserEq   => write!(f, "<="),
+            T::Arrow      => write!(f, "->"),
+            T::Comma      => write!(f, ","),
+            T::Dot        => write!(f, "."),
+            T::Comment    => write!(f, "comment"),
+            T::DocComment => write!(f, "doc-comment"),
+            T::Colon      => write!(f, ":"),
+            T::Semicolon  => write!(f, ";"),
+            T::LeftParen  => write!(f, "("),
+            T::RightParen => write!(f, ")"),
+            T::LeftBrace  => write!(f, "{{"),
+            T::RightBrace => write!(f, "}}"),
+            T::Number     => write!(f, "number"),
+            T::Newline    => write!(f, "newline"),
+            T::Ident      => write!(f, "ident"),
+            T::Keyword(k) => fmt::Display::fmt(k, f),
+            T::EOS        => write!(f, "end-of-source"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeywordKind {
+    False,
+    Func,
+    Const,
+    True,
+    Var,
+}
+
+impl fmt::Display for KeywordKind {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use KeywordKind as K;
+        match self {
+            K::False => write!(f, "false"),
+            K::Func  => write!(f, "func"),
+            K::Const => write!(f, "const"),
+            K::True  => write!(f, "true"),
+            K::Var   => write!(f, "var"),
+        }
+    }
+}
+
+impl FromStr for KeywordKind {
+    type Err = ();
+
+    #[rustfmt::skip]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use KeywordKind as K;
+        match s {
+            "false" => Ok(K::False),
+            "func"  => Ok(K::Func),
+            "const" => Ok(K::Const),
+            "true"  => Ok(K::True),
+            "var"   => Ok(K::Var),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Chunk of source code, encoded as starting and ending positions.
+#[derive(Debug, Clone)]
+pub struct Span {
+    /// Start position of bytes in source.
+    pub start: usize,
+    /// End position of bytes in source.
+    pub end: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub start_column: usize,
+    pub end_column: usize,
+}

@@ -1,0 +1,8 @@
+
+func add(a: u8, b: u8) -> u8 {
+    return a + b;
+}
+
+func main() {
+    add(4, 7);
+}
