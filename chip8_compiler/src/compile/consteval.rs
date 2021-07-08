@@ -4,7 +4,10 @@ use super::{
     symbol::{ConstValue, SymbolKind},
     CompileError,
 };
-use crate::{parsing::Expr, tokens::TokenKind};
+use crate::{
+    parsing::{Expr, LitValue},
+    tokens::TokenKind,
+};
 
 /// Constant expression evaluator.
 ///
@@ -38,6 +41,13 @@ impl<'a> ConstEval<'a> {
         use ConstValue as V;
 
         match expr {
+            Expr::Literal(lit) => {
+                // Simple case of a literal value.
+                match lit.value {
+                    LitValue::Bool(val) => Ok(V::Bool(val)),
+                    LitValue::U8(val) => Ok(V::U8(val)),
+                }
+            }
             Expr::Access(access_expr) => {
                 // When a constant expression accesses a symbol, we ensure
                 // that it has been defined and the symbol must be constant

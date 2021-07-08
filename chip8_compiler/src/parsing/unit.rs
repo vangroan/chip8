@@ -3,6 +3,7 @@ use super::{block::Block, Parse, ParseError};
 use crate::token_stream::TokenStream;
 
 #[derive(Debug)]
+#[deprecated]
 pub struct CompilationUnit {
     pub block: Block,
 }

@@ -6,8 +6,10 @@ use super::{
     symbol::{Symbol, SymbolKind, ValueType},
     CompileError,
 };
-use crate::parsing::{Block, CompilationUnit, ConstDef, Expr, Stmt};
+use crate::parsing::{Block, ConstDef, DefStmt, Expr, Prog, Stmt, VarDef};
 use std::convert::TryFrom;
+
+type CompileResult = Result<(), CompileError>;
 
 /// Code generator.
 pub struct CodeGen {
@@ -35,8 +37,8 @@ impl CodeGen {
         }
     }
 
-    pub fn compile(&mut self, unit: &CompilationUnit) -> Result<Box<[u8]>, CompileError> {
-        self.emit_comp_unit(unit)?;
+    pub fn compile(&mut self, prog: &Prog) -> Result<Box<[u8]>, CompileError> {
+        self.emit_program(prog)?;
         Ok(assemble(&self.code).into_boxed_slice())
     }
 
@@ -50,25 +52,35 @@ impl CodeGen {
 
 /// Recursive visitor
 impl CodeGen {
-    fn emit_comp_unit(&mut self, unit: &CompilationUnit) -> Result<(), CompileError> {
-        self.emit_block(&unit.block)
+    fn emit_program(&mut self, prog: &Prog) -> CompileResult {
+        for stmt in &prog.stmts {
+            self.emit_def_stmt(stmt)?;
+        }
+        Ok(())
     }
 
-    fn emit_block(&mut self, block: &Block) -> Result<(), CompileError> {
+    fn emit_block(&mut self, block: &Block) -> CompileResult {
         for stmt in &block.stmts {
             self.emit_stmt(stmt)?;
         }
         Ok(())
     }
 
+    fn emit_def_stmt(&mut self, def_stmt: &DefStmt) -> CompileResult {
+        match def_stmt {
+            DefStmt::Func(_func_def) => todo!("func def stmt"),
+            DefStmt::Stmt(stmt) => self.emit_stmt(stmt),
+        }
+    }
+
     #[inline]
-    fn emit_stmt(&mut self, stmt: &Stmt) -> Result<(), CompileError> {
+    fn emit_stmt(&mut self, stmt: &Stmt) -> CompileResult {
         match stmt {
             Stmt::Comment(_) => Ok(()),
             Stmt::Const(stmt) => self.handle_const_def(stmt),
-            Stmt::Var(stmt) => todo!(),
-            Stmt::Expr(expr) => todo!(),
-            Stmt::Func(func) => todo!(),
+            Stmt::Var(stmt) => self.handle_var_def(stmt),
+            Stmt::Expr(_expr) => todo!("expr stmt"),
+            Stmt::Func(_func) => todo!("func stmt"),
         }
     }
 
@@ -81,7 +93,7 @@ impl CodeGen {
     /// The right-hand-side of a constant definition can contain some
     /// simple expressions, evaluated at compile time to a single value.
     /// See [`compile::consteval::ConstEval`].
-    fn handle_const_def(&mut self, const_def: &ConstDef) -> Result<(), CompileError> {
+    fn handle_const_def(&mut self, const_def: &ConstDef) -> CompileResult {
         if self.symbols.check_exists(const_def.name.as_str()) {
             return Err(CompileError::SymbolExists);
         }
@@ -95,9 +107,24 @@ impl CodeGen {
             Symbol {
                 name: const_def.name.clone(),
                 kind: SymbolKind::Const(value),
-                ty: ValueType::try_from(&const_def.ty.ty).unwrap_or_else(|_| panic!("unknown type {}", const_def.ty.ty)),
+                ty: ValueType::try_from(&const_def.ty.ty)
+                    .unwrap_or_else(|_| panic!("unknown type {}", const_def.ty.ty)),
             },
         );
+
+        Ok(())
+    }
+
+    /// Load variable definition into the symbol table.
+    fn handle_var_def(&mut self, var_def: &VarDef) -> CompileResult {
+        if self.symbols.check_exists(var_def.name.as_str()) {
+            return Err(CompileError::SymbolExists);
+        }
+
+        // TODO: Retrieve next vacant register
+        // TODO: Emit runtime bytecode for right-hand-side
+        // TODO: Emit load into variable's register
+        // TODO: Store variable's register in symbol table
 
         Ok(())
     }

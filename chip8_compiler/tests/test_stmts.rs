@@ -1,5 +1,5 @@
 use chip8_compiler::{
-    compile::Mapper,
+    compile::{codegen::CodeGen, Mapper},
     lex::{debug_print_lexer, Lexer},
     parsing::{CompilationUnit, Parse, Prog},
     token_stream::TokenStream,
@@ -22,13 +22,11 @@ fn test_parse_stmts() {
 }
 
 #[test]
-fn test_mapper_stmts() {
+fn test_compile_stmts() {
     let lexer = Lexer::new(SOURCE);
     let mut stream = TokenStream::new(lexer);
     let ast = Prog::parse(&mut stream).unwrap();
+    let bytecode = CodeGen::new().compile(&ast).unwrap();
     // let symbols = Mapper::new().build_symbols(&tree).unwrap();
-    // println!("{:#?}", symbols);
+    println!("{:#?}", bytecode);
 }
-
-#[test]
-fn test_compile_stmts() {}

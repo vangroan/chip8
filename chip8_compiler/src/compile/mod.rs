@@ -1,4 +1,4 @@
-mod codegen;
+pub mod codegen;
 mod consteval;
 mod ir;
 mod mapper;
@@ -17,6 +17,7 @@ use crate::{
 use smol_str::SmolStr;
 use std::{error, fmt};
 
+#[deprecated]
 pub struct CodeGen {
     pub code: Vec<IR>,
     /// Mask to track which of the 15
@@ -44,7 +45,11 @@ impl CodeGen {
     }
 
     #[inline]
-    pub fn compile(&mut self, unit: &CompilationUnit, _symbols: &SymbolTable) -> Result<Vec<u8>, CompileError> {
+    pub fn compile(
+        &mut self,
+        unit: &CompilationUnit,
+        _symbols: &SymbolTable,
+    ) -> Result<Vec<u8>, CompileError> {
         println!("std::mem::size_of::<IR>() -> {}", std::mem::size_of::<IR>());
         self.emit_comp_unit(unit)?;
         Ok(assemble(&self.code))
@@ -146,7 +151,11 @@ impl CodeGen {
         }
     }
 
-    fn emit_const_u8(&mut self, value: u8, result: Option<Register>) -> Result<Register, CompileError> {
+    fn emit_const_u8(
+        &mut self,
+        value: u8,
+        result: Option<Register>,
+    ) -> Result<Register, CompileError> {
         let vx = match result {
             Some(r) => r,
             None => self.next_register()?,
