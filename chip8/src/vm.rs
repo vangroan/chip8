@@ -5,13 +5,17 @@ use rand::prelude::*;
 
 use crate::{
     bytecode::*,
+    clock::Clock,
     constants::*,
     cpu::Chip8Cpu,
     error::{Chip8Error, Chip8Result},
 };
 
+const INFINITE_LOOP_LIMIT: usize = 1000;
+
 pub struct Chip8Vm {
     cpu: Chip8Cpu,
+    clock: Clock,
     loop_counter: usize,
 }
 
@@ -19,6 +23,7 @@ impl Chip8Vm {
     pub fn new() -> Self {
         Chip8Vm {
             cpu: Chip8Cpu::new(),
+            clock: Clock::new(),
             loop_counter: 0,
         }
     }
@@ -41,34 +46,63 @@ impl Chip8Vm {
     }
 }
 
+#[derive(Debug)]
+#[repr(u8)]
+pub enum Flow {
+    Error,
+    Interrupt,
+    Draw,
+    Delay,
+    Jump,
+}
+
 /// Interpreter
 impl Chip8Vm {
     // FIXME: Currently we can't break out of the infinite loops that programs use.
-    fn guard_infinite(&mut self) {
+    fn guard_infinite(&mut self) -> bool {
         self.loop_counter += 1;
-        if self.loop_counter > 1000 {
+        if self.loop_counter > INFINITE_LOOP_LIMIT {
             self.cpu.trap = true;
+            return true;
         }
+        return false;
     }
 
-    pub fn execute(&mut self) -> Chip8Result<()> {
-        self.step();
-
-        match self.cpu.error {
-            Some(err) => Err(Chip8Error::Runtime(err)),
-            None => Ok(()),
-        }
-    }
-
-    fn step(&mut self) {
-        let mut rng = thread_rng();
+    pub fn execute(&mut self) -> Chip8Result<Flow> {
         self.loop_counter = 0;
+        self.clock.reset();
+
+        loop {
+            match self.resume() {
+                Flow::Error => {
+                    return match self.cpu.error {
+                        Some(err) => Err(Chip8Error::Runtime(err)),
+                        None => Ok(Flow::Error),
+                    }
+                }
+                Flow::Interrupt => return Ok(Flow::Interrupt),
+                Flow::Draw | Flow::Delay | Flow::Jump => continue,
+            }
+        }
+    }
+
+    fn resume(&mut self) -> Flow {
+        self.cpu.trap = false;
+        self.cpu.error = None;
+        self.step()
+    }
+
+    fn step(&mut self) -> Flow {
+        let mut rng = thread_rng();
 
         loop {
             if self.cpu.trap {
                 // Interrupt signal is set.
-                return;
+                return Flow::Interrupt;
             }
+
+            #[cfg(not(feature = "turbo"))]
+            self.clock.wait();
 
             // Each instruction is two bytes, with the opcode identity in the first 4-bit nibble.
             let code = self.cpu.op_code();
@@ -78,9 +112,8 @@ impl Chip8Vm {
                 //
                 // Clear display
                 0x00E0 => {
-                    // for px in cpu.display.iter_mut() {
-                    //     *px = false;
-                    // }
+                    op_trace("CLS");
+
                     self.cpu.clear_display();
                     self.cpu.pc += 2;
                 }
@@ -90,6 +123,8 @@ impl Chip8Vm {
                 // Set the program counter to the value at the top of the stack.
                 // Subtract 1 from the stack pointer.
                 0x00EE => {
+                    op_trace("RET");
+
                     self.cpu.pc = self.cpu.stack[self.cpu.sp] as usize;
                     self.cpu.sp -= 1;
                 }
@@ -102,7 +137,12 @@ impl Chip8Vm {
                     let address: Address = self.cpu.op_nnn();
                     self.cpu.pc = address as usize;
 
-                    self.guard_infinite();
+                    if self.guard_infinite() {
+                        continue;
+                    } else {
+                        self.cpu.trap = true;
+                        return Flow::Jump;
+                    }
                 }
                 // 2NNN (CALL addr)
                 //
@@ -295,7 +335,10 @@ impl Chip8Vm {
                         self.cpu.pc += 2;
                     }
                     // Unsupported operation.
-                    _ => self.cpu.set_error("unsupported opcode"),
+                    _ => {
+                        self.cpu.set_error("unsupported opcode");
+                        return Flow::Error;
+                    }
                 },
                 // 9XY0 (SNE Vx, Vy)
                 //
@@ -371,12 +414,18 @@ impl Chip8Vm {
                     // If a pixel was erased, then a collision occurred.
                     self.cpu.registers[0xF] = is_erased as u8;
                     self.cpu.pc += 2;
+
+                    self.cpu.trap = true;
+                    return Flow::Draw;
                 }
                 0xE => match self.cpu.op_nn() {
                     0x9E => todo!("SKP Vx"),
                     0xA1 => todo!("SKNP Vx"),
                     // Unsupported operation.
-                    _ => self.cpu.set_error("unsupported opcode"),
+                    _ => {
+                        self.cpu.set_error("unsupported opcode");
+                        return Flow::Error;
+                    }
                 },
                 0xF => match self.cpu.op_nn() {
                     0x07 => todo!("LD Vx, DT"),
@@ -389,10 +438,16 @@ impl Chip8Vm {
                     0x55 => todo!("LD [I], Vx"),
                     0x65 => todo!("LD Vx, [I]"),
                     // Unsupported operation.
-                    _ => self.cpu.set_error("unsupported opcode"),
+                    _ => {
+                        self.cpu.set_error("unsupported opcode");
+                        return Flow::Error;
+                    }
                 },
                 // Unsupported operation.
-                _ => self.cpu.set_error("unsupported opcode"),
+                _ => {
+                    self.cpu.set_error("unsupported opcode");
+                    return Flow::Error;
+                }
             }
         }
     }
@@ -441,6 +496,12 @@ impl Chip8Vm {
 
 #[cfg(feature = "op_trace")]
 #[inline]
+fn op_trace(name: &str) {
+    println!("{:04X}: {:4}", cpu.pc, name);
+}
+
+#[cfg(feature = "op_trace")]
+#[inline]
 fn op_trace_nnn(name: &str, cpu: &Chip8Cpu) {
     let nnn = cpu.op_nnn();
     println!("{:04X}: {:4} {:03X}", cpu.pc, name, nnn);
@@ -480,6 +541,10 @@ fn op_trace_xy_op(name: &str, cpu: &Chip8Cpu) {
         cpu.pc, name, vx, vy, op2
     );
 }
+
+#[cfg(not(feature = "op_trace"))]
+#[inline]
+fn op_trace(_: &str) {}
 
 #[cfg(not(feature = "op_trace"))]
 #[inline]

@@ -27,5 +27,12 @@ pub const DISPLAY_BUFFER_SIZE: usize = DISPLAY_WIDTH * DISPLAY_HEIGHT;
 pub const DISPLAY_WIDTH_MASK: usize = DISPLAY_WIDTH - 1;
 pub const DISPLAY_HEIGHT_MASK: usize = DISPLAY_HEIGHT - 1;
 
+pub const CLOCK_FREQUENCY: usize = 60;
+
+pub const NANOS_IN_SECOND: u128 = 1000000;
+
+/// Time in nanoseconds a single clock cycle takes.
+pub const CLOCK_CYCLE_TIME: u128 = NANOS_IN_SECOND / CLOCK_FREQUENCY as u128;
+
 /// Type for storing the 12-bit memory addresses.
 pub type Address = u16;

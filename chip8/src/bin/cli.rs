@@ -26,7 +26,9 @@ fn run_bytecode() -> Chip8Result<()> {
     ); // to millis
     println!("{}", vm.dump_display()?);
 
-    result
+    result?;
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

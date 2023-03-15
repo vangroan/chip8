@@ -1,9 +1,9 @@
 mod bytecode;
+mod clock;
 pub mod constants;
 mod cpu;
 mod disasm;
 mod error;
-// mod interp;
 mod vm;
 
 pub mod prelude {

@@ -27,8 +27,13 @@ criterion = "0.4"
 [[bench]]
 name = "maze"
 harness = false
+# FIXME: criterion is ignoring the feature defined here
+features = ["turbo"]
 
 [features]
 default = []
 
 op_trace = []
+
+# Turn off the CPU clock and run the interpreter as quickly as possible.
+turbo = []
