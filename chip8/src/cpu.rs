@@ -6,7 +6,6 @@ use crate::{bytecode::*, constants::*};
 pub struct Chip8Cpu {
     // ------------------------------------------------------------------------
     // Registers
-
     /// Program counter pointing to the current position in the bytecode.
     pub(crate) pc: usize,
     /// Stack pointer, indicating the top of the stack.
@@ -25,14 +24,12 @@ pub struct Chip8Cpu {
 
     // ------------------------------------------------------------------------
     // Memory
-
     /// Main memory storage space.
     pub(crate) ram: Box<[u8; MEM_SIZE]>,
     /// Stack of return pointers used for jumping when a routine call finishes.
     pub(crate) stack: Box<[Address; STACK_SIZE]>,
     /// Screen buffer that is drawn too.
     pub(crate) display: Box<[bool; DISPLAY_BUFFER_SIZE]>,
-
     // ------------------------------------------------------------------------
     // Control
 
@@ -60,6 +57,13 @@ impl Default for Chip8Cpu {
 impl Chip8Cpu {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Erase the contents of the memory buffers `ram`, `stack` and `display`.
+    pub(crate) fn clear_memory(&mut self) {
+        self.ram.fill(0);
+        self.stack.fill(0);
+        self.display.fill(false);
     }
 
     /// Extract opcode from the current program pointer.

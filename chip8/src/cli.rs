@@ -3,6 +3,7 @@ mod bytecode;
 pub mod constants;
 mod cpu;
 mod disasm;
+mod error;
 mod interp;
 mod vm;
 
@@ -17,7 +18,7 @@ fn run_bytecode() -> Result<(), Box<dyn Error>> {
 
     let interpreter = BytecodeInterp;
     let mut vm = Chip8Vm::new(interpreter);
-    vm.load_bytecode(BYTECODE);
+    vm.load_bytecode(BYTECODE)?;
 
     Disassembler::new(BYTECODE).print_bytecode();
 

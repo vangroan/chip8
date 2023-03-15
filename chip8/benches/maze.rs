@@ -6,12 +6,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     {
         let interpreter = BytecodeInterp;
         let mut vm = Chip8Vm::new(interpreter);
-        vm.load_bytecode(include_bytes!("../programs/maze"));
+        vm.load_bytecode(include_bytes!("../programs/maze"))
+            .unwrap();
 
         c.bench_function("maze bytecode", |b| {
             b.iter(|| {
                 let _ = black_box(1000);
-                vm.execute()
+                black_box(vm.execute())
             })
         });
     }

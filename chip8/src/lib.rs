@@ -2,6 +2,7 @@ mod bytecode;
 pub mod constants;
 mod cpu;
 mod disasm;
+mod error;
 mod interp;
 mod vm;
 

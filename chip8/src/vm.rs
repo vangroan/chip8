@@ -1,8 +1,12 @@
 //! Virtual machine.
 use std::fmt::Write;
 
-use crate::constants::*;
-use crate::cpu::Chip8Cpu;
+use crate::{
+    bytecode::check_program_size,
+    constants::*,
+    cpu::Chip8Cpu,
+    error::{Chip8Error, Result as Chip8Result},
+};
 
 pub trait Interpreter {
     /// Called after bytecode has been loaded into the VM memory.
@@ -24,17 +28,24 @@ impl<T: Interpreter> Chip8Vm<T> {
         }
     }
 
-    pub fn load_bytecode(&mut self, bytecode: &[u8]) {
-        let count = bytecode.len().min(4096 - MEM_START);
-        for i in 0..count {
-            self.cpu.ram[MEM_START + i] = bytecode[i];
+    pub fn load_bytecode(&mut self, bytecode: &[u8]) -> Chip8Result<()> {
+        if !check_program_size(bytecode) {
+            return Err(Chip8Error::LargeProgram);
         }
+
+        // Start with clean memory to avoid leaking previous program.
+        self.cpu.clear_memory();
+
+        // Load program into virtual RAM
+        self.cpu.ram[MEM_START..MEM_START + bytecode.len()].copy_from_slice(bytecode);
 
         // Reset the program counter to prepare for execution.
         self.cpu.pc = MEM_START;
 
         // Call inner interpreter for implementation specific preparation.
         self.interp.on_load(&self.cpu);
+
+        Ok(())
     }
 
     pub fn execute(&mut self) {
@@ -75,7 +86,7 @@ impl<T: Interpreter> Chip8Vm<T> {
                     write!(buf, ".")?;
                 }
             }
-            write!(buf, "\n")?;
+            writeln!(buf)?;
         }
 
         Ok(buf)
