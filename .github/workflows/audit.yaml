@@ -15,5 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/audit-check@issue-104
+        continue-on-error: true  # FIXME: audit action broken
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
