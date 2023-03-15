@@ -1,14 +1,21 @@
-use chip8_bytecode::{BytecodeInterpreter, Disassembler};
-use chip8_core::prelude::*;
-use chip8_tree::StaticSimulator;
+//! Entrypoint for CLI
+mod bytecode;
+pub mod constants;
+mod cpu;
+mod disasm;
+mod interp;
+mod vm;
+
 use std::{error::Error, time::Instant};
+
+use self::{disasm::Disassembler, interp::BytecodeInterp, vm::Chip8Vm};
 
 const BYTECODE: &[u8] = include_bytes!("../programs/maze");
 
 fn run_bytecode() -> Result<(), Box<dyn Error>> {
     println!("Running Bytecode Interpreter");
 
-    let interpreter = BytecodeInterpreter;
+    let interpreter = BytecodeInterp;
     let mut vm = Chip8Vm::new(interpreter);
     vm.load_bytecode(BYTECODE);
 
@@ -29,17 +36,8 @@ fn run_bytecode() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_tree() {
-    println!("Running Tree Interpreter");
-
-    let interpreter = StaticSimulator::new();
-    let mut vm = Chip8Vm::new(interpreter);
-    vm.load_bytecode(include_bytes!("../programs/maze"));
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     run_bytecode()?;
-    run_tree();
 
     Ok(())
 }

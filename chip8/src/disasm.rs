@@ -1,6 +1,7 @@
 //! Disassembler.
-use chip8_core::utils::*;
 use std::fmt::{self, Write as FmtWrite};
+
+use crate::bytecode::*;
 
 pub struct Disassembler<'a> {
     bytecode: &'a [u8],
