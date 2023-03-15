@@ -1,10 +1,31 @@
 //! Bytecode interpreter.
+use std::cell::Cell;
+
 use rand::prelude::*;
 
 use crate::{constants::*, cpu::Chip8Cpu, vm::Interpreter};
 
 // Bytecode interpreter.
-pub struct BytecodeInterp;
+pub struct BytecodeInterp {
+    loop_counter: Cell<usize>,
+}
+
+impl BytecodeInterp {
+    pub fn new() -> Self {
+        Self {
+            loop_counter: Cell::new(0),
+        }
+    }
+
+    // FIXME: Currently we can't break out of the infinite loops that programs use.
+    fn guard_infinite(&self, cpu: &mut Chip8Cpu) {
+        let counter = self.loop_counter.get();
+        self.loop_counter.set(counter + 1);
+        if counter > 1000 {
+            cpu.trap = true;
+        }
+    }
+}
 
 impl Interpreter for BytecodeInterp {
     fn on_load(&mut self, _cpu: &Chip8Cpu) {
@@ -13,14 +34,13 @@ impl Interpreter for BytecodeInterp {
 
     fn execute(&self, cpu: &mut Chip8Cpu) {
         let mut rng = thread_rng();
-        let mut loop_count = 0;
+        self.loop_counter.set(0);
 
         loop {
-            // Currently we can't break out of the infinite loops that programs use.
-            if loop_count > 1000 {
+            if cpu.trap {
+                // Interrupt signal is set.
                 return;
             }
-            loop_count += 1;
 
             // Each instruction is two bytes, with the opcode identity in the first 4-bit nibble.
             let code = cpu.op_code();
@@ -30,9 +50,10 @@ impl Interpreter for BytecodeInterp {
                 //
                 // Clear display
                 0x00E0 => {
-                    for px in cpu.display.iter_mut() {
-                        *px = false;
-                    }
+                    // for px in cpu.display.iter_mut() {
+                    //     *px = false;
+                    // }
+                    cpu.clear_display();
                     cpu.pc += 2;
                 }
                 // 00EE (RET)
@@ -52,6 +73,8 @@ impl Interpreter for BytecodeInterp {
 
                     let address: Address = cpu.op_nnn();
                     cpu.pc = address as usize;
+
+                    self.guard_infinite(cpu);
                 }
                 // 2NNN (CALL addr)
                 //
@@ -235,16 +258,9 @@ impl Interpreter for BytecodeInterp {
                         cpu.pc += 2;
                     }
                     // Unsupported operation.
-                    _ => {
-                        panic!(
-                            "Unsupported opcode {:02X}__{:02X} at address {:04X}",
-                            code,
-                            cpu.op_n(),
-                            cpu.pc
-                        );
-                    }
+                    _ => cpu.set_error("unsupported opcode"),
                 },
-                // 0x9XY0 (SNE Vx, Vy)
+                // 9XY0 (SNE Vx, Vy)
                 //
                 // Skip next instruction if Vx != Vy.
                 // The values of Vx and Vy are compared, and if they are not equal, the program counter is increased by 2.
@@ -321,12 +337,8 @@ impl Interpreter for BytecodeInterp {
                 0xE => match cpu.op_nn() {
                     0x9E => todo!("SKP Vx"),
                     0xA1 => todo!("SKNP Vx"),
-                    _ => panic!(
-                        "Unsupported opcode {:02X}__{:02X} at address {:04X}",
-                        code,
-                        cpu.op_nn(),
-                        cpu.pc
-                    ),
+                    // Unsupported operation.
+                    _ => cpu.set_error("unsupported opcode"),
                 },
                 0xF => match cpu.op_nn() {
                     0x07 => todo!("LD Vx, DT"),
@@ -338,18 +350,11 @@ impl Interpreter for BytecodeInterp {
                     0x33 => todo!("LD B, Vx"),
                     0x55 => todo!("LD [I], Vx"),
                     0x65 => todo!("LD Vx, [I]"),
-                    _ => panic!(
-                        "Unsupported opcode {:02X}__{:02X} at address {:04X}",
-                        code,
-                        cpu.op_nn(),
-                        cpu.pc
-                    ),
+                    // Unsupported operation.
+                    _ => cpu.set_error("unsupported opcode"),
                 },
                 // Unsupported operation.
-                _ => {
-                    panic!("Unsupported opcode {:02X} at address {:04X}", code, cpu.pc)
-                    // return;
-                }
+                _ => cpu.set_error("unsupported opcode"),
             }
         }
     }

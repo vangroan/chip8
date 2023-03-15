@@ -30,11 +30,13 @@ pub struct Chip8Cpu {
     pub(crate) stack: Box<[Address; STACK_SIZE]>,
     /// Screen buffer that is drawn too.
     pub(crate) display: Box<[bool; DISPLAY_BUFFER_SIZE]>,
+
     // ------------------------------------------------------------------------
     // Control
-
-    // pub(crate) trap: bool,
-    // pub(crate) error: Option<&str>,
+    /// Interrupt for VM loop.
+    pub(crate) trap: bool,
+    /// Error message if the VM is in an error state.
+    pub(crate) error: Option<&'static str>,
 }
 
 impl Default for Chip8Cpu {
@@ -50,6 +52,9 @@ impl Default for Chip8Cpu {
             ram: Box::new([0; MEM_SIZE]),
             stack: Box::new([0; STACK_SIZE]),
             display: Box::new([false; DISPLAY_BUFFER_SIZE]),
+
+            trap: false,
+            error: None,
         }
     }
 }
@@ -63,6 +68,23 @@ impl Chip8Cpu {
     pub(crate) fn clear_memory(&mut self) {
         self.ram.fill(0);
         self.stack.fill(0);
+        self.display.fill(false);
+    }
+
+    pub fn interrupt(&mut self) {
+        self.trap = true;
+    }
+
+    pub fn set_error(&mut self, message: &'static str) {
+        self.trap = true;
+        self.error = Some(message);
+    }
+
+    pub fn error(&self) -> Option<&str> {
+        self.error
+    }
+
+    pub fn clear_display(&mut self) {
         self.display.fill(false);
     }
 

@@ -1,22 +1,22 @@
 //! Entrypoint for CLI
-mod bytecode;
-pub mod constants;
-mod cpu;
-mod disasm;
-mod error;
-mod interp;
-mod vm;
+// mod bytecode;
+// pub mod constants;
+// mod cpu;
+// mod disasm;
+// mod error;
+// mod interp;
+// mod vm;
 
 use std::{error::Error, time::Instant};
 
-use self::{disasm::Disassembler, interp::BytecodeInterp, vm::Chip8Vm};
+use chip8::prelude::*;
 
-const BYTECODE: &[u8] = include_bytes!("../programs/maze");
+const BYTECODE: &[u8] = include_bytes!("../../programs/maze");
 
-fn run_bytecode() -> Result<(), Box<dyn Error>> {
+fn run_bytecode() -> Chip8Result<()> {
     println!("Running Bytecode Interpreter");
 
-    let interpreter = BytecodeInterp;
+    let interpreter = BytecodeInterp::new();
     let mut vm = Chip8Vm::new(interpreter);
     vm.load_bytecode(BYTECODE)?;
 
@@ -25,7 +25,7 @@ fn run_bytecode() -> Result<(), Box<dyn Error>> {
     // println!("{}", vm.dump_ram(include_bytes!("../programs/maze").len())?);
 
     let start = Instant::now();
-    vm.execute();
+    let result = vm.execute();
     let end = Instant::now();
 
     println!(
@@ -34,7 +34,7 @@ fn run_bytecode() -> Result<(), Box<dyn Error>> {
     ); // to millis
     println!("{}", vm.dump_display()?);
 
-    Ok(())
+    result
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

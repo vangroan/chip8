@@ -5,7 +5,7 @@ use crate::{
     bytecode::check_program_size,
     constants::*,
     cpu::Chip8Cpu,
-    error::{Chip8Error, Result as Chip8Result},
+    error::{Chip8Error, Chip8Result},
 };
 
 pub trait Interpreter {
@@ -48,16 +48,22 @@ impl<T: Interpreter> Chip8Vm<T> {
         Ok(())
     }
 
-    pub fn execute(&mut self) {
+    pub fn execute(&mut self) -> Chip8Result<()> {
         self.interp.execute(&mut self.cpu);
+
+        match self.cpu.error {
+            Some(err) => Err(Chip8Error::Runtime(err)),
+            None => Ok(()),
+        }
     }
 }
 
 /// Troubleshooting
 #[allow(dead_code)]
+#[doc(hidden)]
 impl<T: Interpreter> Chip8Vm<T> {
     /// Returns the contents of the memory as a human readable string.
-    pub(crate) fn dump_ram(&self, count: usize) -> Result<String, std::fmt::Error> {
+    pub fn dump_ram(&self, count: usize) -> Result<String, std::fmt::Error> {
         let iter = self
             .cpu
             .ram
@@ -75,7 +81,7 @@ impl<T: Interpreter> Chip8Vm<T> {
         Ok(buf)
     }
 
-    pub(crate) fn dump_display(&self) -> Result<String, std::fmt::Error> {
+    pub fn dump_display(&self) -> Result<String, std::fmt::Error> {
         let mut buf = String::new();
 
         for y in 0..DISPLAY_HEIGHT {

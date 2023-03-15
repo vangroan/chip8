@@ -16,7 +16,7 @@ lto = "fat"
 
 [[bin]]
 name = "chip8"
-path = "src/cli.rs"
+path = "src/bin/cli.rs"
 
 [dependencies]
 rand = "0.8"
