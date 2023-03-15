@@ -2,7 +2,4 @@
 
 members = [
     "chip8",
-    "chip8_core",
-    "chip8_bytecode",
-    "chip8_tree",
 ]

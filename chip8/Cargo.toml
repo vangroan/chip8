@@ -1,6 +1,6 @@
 [package]
 name = "chip8"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Willem Victor <wimpievictor@gmail.com>"]
 edition = "2018"
 
@@ -14,17 +14,21 @@ edition = "2018"
 codegen-units = 1
 lto = "fat"
 
+[[bin]]
+name = "chip8"
+path = "src/cli.rs"
+
 [dependencies]
-chip8_core = { version = "*", path = "../chip8_core" }
-chip8_bytecode = { version = "*", path = "../chip8_bytecode" }
-chip8_tree = { version = "*", path = "../chip8_tree" }
+rand = "0.8"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.4"
 
 [[bench]]
 name = "maze"
 harness = false
 
 [features]
-op_trace = ["chip8_bytecode/op_trace"]
+default = []
+
+op_trace = []

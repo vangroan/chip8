@@ -1,4 +1,11 @@
-/// Convenience helpers for extracting data from opcodes.
+/// Helpers for extracting data from opcodes.
+use crate::constants::*;
+
+/// Returns true if the program can fit in VM memory.
+#[inline]
+pub(crate) fn check_program_size(program: &[u8]) -> bool {
+    program.len() <= (MEM_SIZE - MEM_START)
+}
 
 /// Extract opcode from the buffer at the cursor.
 #[inline(always)]
@@ -10,6 +17,12 @@ pub fn op_code(bytecode: &[u8], cursor: usize) -> u8 {
 #[inline(always)]
 pub fn op_nnn(bytecode: &[u8], cursor: usize) -> u16 {
     ((bytecode[cursor] as u16 & 0b1111) << 8) | bytecode[cursor + 1] as u16
+}
+
+/// Extract operand NN from the buffer at the cursor.
+#[inline(always)]
+pub fn op_nn(bytecode: &[u8], cursor: usize) -> u8 {
+    bytecode[cursor]
 }
 
 /// Extract operands VX and NN from the buffer at the cursor.
