@@ -5,4 +5,5 @@ members = [
     "chip8_core",
     "chip8_bytecode",
     "chip8_tree",
+    "chip8_compiler",
 ]
