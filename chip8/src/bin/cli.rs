@@ -1,11 +1,4 @@
 //! Entrypoint for CLI
-// mod bytecode;
-// pub mod constants;
-// mod cpu;
-// mod disasm;
-// mod error;
-// mod interp;
-// mod vm;
 
 use std::{error::Error, time::Instant};
 
@@ -16,8 +9,7 @@ const BYTECODE: &[u8] = include_bytes!("../../programs/maze");
 fn run_bytecode() -> Chip8Result<()> {
     println!("Running Bytecode Interpreter");
 
-    let interpreter = BytecodeInterp::new();
-    let mut vm = Chip8Vm::new(interpreter);
+    let mut vm = Chip8Vm::new();
     vm.load_bytecode(BYTECODE)?;
 
     Disassembler::new(BYTECODE).print_bytecode();

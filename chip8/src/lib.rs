@@ -3,7 +3,7 @@ pub mod constants;
 mod cpu;
 mod disasm;
 mod error;
-mod interp;
+// mod interp;
 mod vm;
 
 pub mod prelude {
@@ -11,7 +11,7 @@ pub mod prelude {
         cpu::Chip8Cpu,
         disasm::Disassembler,
         error::{Chip8Error, Chip8Result},
-        interp::BytecodeInterp,
-        vm::{Chip8Vm, Interpreter},
+        // interp::BytecodeInterp,
+        vm::Chip8Vm,
     };
 }
