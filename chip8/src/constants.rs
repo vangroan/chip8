@@ -28,14 +28,14 @@ pub const DISPLAY_WIDTH_MASK: usize = DISPLAY_WIDTH - 1;
 pub const DISPLAY_HEIGHT_MASK: usize = DISPLAY_HEIGHT - 1;
 
 /// Number of clock cycles in a second that delay timers count down.
-pub const DELAY_FREQUENCY: usize = 60;
+pub const DELAY_FREQUENCY: u64 = 60;
 
 /// Number of nanoseconds in a second
 #[doc(hidden)]
 pub const NANOS_IN_SECOND: u64 = 1_000_000_000;
 
 /// Time in nanoseconds a single clock cycle takes, precalculated.
-pub const CLOCK_CYCLE_TIME: u64 = NANOS_IN_SECOND / DELAY_FREQUENCY as u64;
+pub const CLOCK_CYCLE_TIME: u64 = NANOS_IN_SECOND / DELAY_FREQUENCY;
 
 /// Type for storing the 12-bit memory addresses.
 pub type Address = u16;

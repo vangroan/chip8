@@ -1,7 +1,7 @@
 //! Disassembler.
 use std::fmt::{self, Write as FmtWrite};
 
-use crate::bytecode::*;
+use crate::{bytecode::*, constants::*};
 
 pub struct Disassembler<'a> {
     bytecode: &'a [u8],
@@ -53,17 +53,29 @@ impl<'a> Disassembler<'a> {
             0xA => self.dis_innn(w, "LD"),
             0xC => self.dis_xnn(w, "RND"),
             0xD => self.dis_xyn(w, "DRW"),
+            0xF => match op_nn(self.bytecode, self.cursor) {
+                0x07 => self.dis_xk(w, "LD", "DT"),
+                0x15 => self.dis_kx(w, "LD", "DT"),
+                0x18 => self.dis_kx(w, "LD", "ST"),
+                _ => self.write_unknown(w),
+            },
             _ => self.write_unknown(w),
         }
     }
 
     fn write_pc<W: FmtWrite>(&self, w: &mut W) -> fmt::Result {
-        write!(w, "0x{:04X}\t", self.cursor)
+        write!(w, "0x{:04X}\t", MEM_START + self.cursor)
     }
 
     fn write_unknown<W: FmtWrite>(&self, w: &mut W) -> fmt::Result {
         self.write_pc(w)?;
-        writeln!(w, "0x{:02X}\tUNKNOWN", op_code(self.bytecode, self.cursor))
+        let a = self.bytecode.get(self.cursor).cloned().unwrap_or_default();
+        let b = self
+            .bytecode
+            .get(self.cursor + 1)
+            .cloned()
+            .unwrap_or_default();
+        writeln!(w, "{:02X}{:02X}\tUNKNOWN", a, b)
     }
 
     fn dis_simple<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
@@ -99,6 +111,18 @@ impl<'a> Disassembler<'a> {
         self.write_pc(w)?;
         let (vx, vy) = op_xy(self.bytecode, self.cursor);
         writeln!(w, "{}\tV{:02X}, V{:02X}", name, vx, vy)
+    }
+
+    fn dis_xk<W: FmtWrite>(&self, w: &mut W, name: &str, k: &str) -> fmt::Result {
+        self.write_pc(w)?;
+        let vx = op_x(self.bytecode, self.cursor);
+        writeln!(w, "{}\tV{:02X}, {}", name, vx, k)
+    }
+
+    fn dis_kx<W: FmtWrite>(&self, w: &mut W, name: &str, k: &str) -> fmt::Result {
+        self.write_pc(w)?;
+        let vx = op_x(self.bytecode, self.cursor);
+        writeln!(w, "{}\t{}, V{:02X}", name, k, vx)
     }
 
     fn dis_xy_op<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {

@@ -67,4 +67,16 @@ impl Clock {
             }
         }
     }
+
+    /// Returns true when the next clock cycle has been reached.
+    pub(crate) fn tick(&mut self) -> bool {
+        let elapsed = self.last.elapsed().as_nanos();
+        if elapsed < self.interval {
+            false
+        } else {
+            // Reset back to zero, rather than trying to catch up.
+            self.reset();
+            true
+        }
+    }
 }

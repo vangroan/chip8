@@ -16,6 +16,7 @@ const INFINITE_LOOP_LIMIT: usize = 1000;
 pub struct Chip8Vm {
     cpu: Chip8Cpu,
     clock: Clock,
+    timer: Clock,
     loop_counter: usize,
     conf: Chip8Conf,
 }
@@ -25,6 +26,7 @@ impl Chip8Vm {
         Chip8Vm {
             cpu: Chip8Cpu::new(),
             clock: Clock::new(conf.clock_frequency.unwrap_or_default().into()),
+            timer: Clock::from_nanos(DELAY_FREQUENCY),
             loop_counter: 0,
             conf,
         }
@@ -95,9 +97,15 @@ impl Chip8Vm {
         return false;
     }
 
-    pub fn execute(&mut self) -> Chip8Result<Flow> {
+    /// Clear internal state in preparation for a fresh startup.
+    fn reset(&mut self) {
         self.loop_counter = 0;
         self.clock.reset();
+        self.timer.reset();
+    }
+
+    pub fn execute(&mut self) -> Chip8Result<Flow> {
+        self.reset();
 
         loop {
             match self.resume() {
@@ -130,6 +138,24 @@ impl Chip8Vm {
 
             #[cfg(feature = "throttle")]
             self.clock.wait();
+
+            // Count down timers
+            if self.timer.tick() {
+                // self.cpu.delay = self.cpu.delay.checked_sub(1).unwrap_or_default();
+                // self.cpu.sound = self.cpu.sound.checked_sub(1).unwrap_or_default();
+                self.cpu.tick_sound();
+                self.cpu.tick_delay();
+
+                // Buzzer should be on while sound timer counts down,
+                // then turned off when the timer reaches zero.
+                if self.cpu.sound_timer > 0 && !self.cpu.buzzer_state {
+                    self.cpu.buzzer_state = true;
+                    // self.devices.buzz(true);
+                } else if self.cpu.sound_timer == 0 && self.cpu.buzzer_state {
+                    self.cpu.buzzer_state = false;
+                    // self.deviecs.buzz(false);
+                }
+            }
 
             // Each instruction is two bytes, with the opcode identity in the first 4-bit nibble.
             let code = self.cpu.op_code();
@@ -455,10 +481,40 @@ impl Chip8Vm {
                     }
                 },
                 0xF => match self.cpu.op_nn() {
-                    0x07 => todo!("LD Vx, DT"),
+                    // Fx07 (LD Vx, DT)
+                    //
+                    // Set Vx = delay timer value.
+                    // The value of DT is placed into Vx.
+                    0x07 => {
+                        op_trace_xk("LD", &self.cpu, "DT");
+
+                        let vx = self.cpu.op_x();
+                        self.cpu.registers[vx as usize] = self.cpu.delay_timer;
+                    }
                     0x0A => todo!("LD Vx, K"),
-                    0x15 => todo!("LD DT, Vx"),
-                    0x18 => todo!("LD ST, Vx"),
+                    // Fx15 (LD DT, Vx)
+                    //
+                    // Set delay timer = Vx.
+                    // DT is set equal to the value of Vx.
+                    0x15 => {
+                        op_trace_kx("LD", &self.cpu, "DT");
+
+                        let vx = self.cpu.op_x();
+                        self.cpu.delay_timer = self.cpu.registers[vx as usize];
+                    }
+                    // Fx18 (LD ST, Vx)
+                    //
+                    // Set sound timer = Vx.
+                    // ST is set equal to the value of Vx.
+                    0x18 => {
+                        op_trace_kx("LD", &self.cpu, "ST");
+
+                        let vx = self.cpu.op_x();
+                        self.cpu.sound_timer = self.cpu.registers[vx as usize];
+                        self.cpu.buzzer_state = self.cpu.sound_timer > 0;
+
+                        // self.devices.buzz(self.cpu.buzzer_state);
+                    }
                     0x1E => todo!("ADD I, Vx"),
                     0x29 => todo!("LD F, Vx"),
                     0x33 => todo!("LD B, Vx"),
@@ -560,6 +616,20 @@ fn op_trace_xy(name: &str, cpu: &Chip8Cpu) {
 
 #[cfg(feature = "op_trace")]
 #[inline]
+fn op_trace_xk(name: &str, cpu: &Chip8Cpu, k: &str) {
+    let vx = cpu.op_xk();
+    println!("{:04X}: {:4} V{:02X} {}", cpu.pc, name, vx, k);
+}
+
+#[cfg(feature = "op_trace")]
+#[inline]
+fn op_trace_kx(name: &str, cpu: &Chip8Cpu, k: &str) {
+    let vx = cpu.op_xk();
+    println!("{:04X}: {:4} {} V{:02X}", cpu.pc, name, k, vx);
+}
+
+#[cfg(feature = "op_trace")]
+#[inline]
 fn op_trace_xy_op(name: &str, cpu: &Chip8Cpu) {
     let (vx, vy) = cpu.op_xy();
     let op2 = cpu.op_n();
@@ -588,6 +658,14 @@ fn op_trace_xyn(_: &str, _: &Chip8Cpu) {}
 #[cfg(not(feature = "op_trace"))]
 #[inline]
 fn op_trace_xy(_: &str, _: &Chip8Cpu) {}
+
+#[cfg(not(feature = "op_trace"))]
+#[inline]
+fn op_trace_xk(_: &str, _: &Chip8Cpu, _: &str) {}
+
+#[cfg(not(feature = "op_trace"))]
+#[inline]
+fn op_trace_kx(_: &str, _: &Chip8Cpu, _: &str) {}
 
 #[cfg(not(feature = "op_trace"))]
 #[inline]
