@@ -1,16 +1,18 @@
 mod bytecode;
+mod clock;
 pub mod constants;
 mod cpu;
 mod disasm;
 mod error;
-mod interp;
 mod vm;
+
+pub use self::vm::Hz;
 
 pub mod prelude {
     pub use super::{
         cpu::Chip8Cpu,
         disasm::Disassembler,
-        interp::BytecodeInterp,
-        vm::{Chip8Vm, Interpreter},
+        error::{Chip8Error, Chip8Result},
+        vm::{Chip8Conf, Chip8Vm},
     };
 }

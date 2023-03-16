@@ -4,8 +4,7 @@ use chip8::prelude::*;
 
 fn criterion_benchmark(c: &mut Criterion) {
     {
-        let interpreter = BytecodeInterp;
-        let mut vm = Chip8Vm::new(interpreter);
+        let mut vm = Chip8Vm::new(Chip8Conf::default());
         vm.load_bytecode(include_bytes!("../programs/maze"))
             .unwrap();
 

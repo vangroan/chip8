@@ -42,15 +42,23 @@ pub fn op_xyn(bytecode: &[u8], cursor: usize) -> (u8, u8, u8) {
     (op, (data & 0b1111_0000) >> 4, data & 0b1111)
 }
 
-/// Extract operands VX, VY and N from the buffer at the cursor.
+/// Extract operands VX and VY from the buffer at the cursor.
 #[inline(always)]
 pub fn op_xy(bytecode: &[u8], cursor: usize) -> (u8, u8) {
     // Opcode is in upper nibble and needs to be masked out.
-    let op = bytecode[cursor] & 0b1111;
-    let data = bytecode[cursor + 1];
+    let x = bytecode[cursor] & 0b1111;
 
     // Lower nibble is unused.
-    (op, (data & 0b1111_0000) >> 4)
+    let y = (bytecode[cursor + 1] & 0b1111_0000) >> 4;
+
+    (x, y)
+}
+
+/// Extract operands VX, VY and N from the buffer at the cursor.
+#[inline(always)]
+pub fn op_x(bytecode: &[u8], cursor: usize) -> u8 {
+    // Opcode is in upper nibble and needs to be masked out.
+    bytecode[cursor] & 0b1111
 }
 
 /// Extract operand N from the buffer at the cursor.

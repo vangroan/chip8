@@ -16,7 +16,7 @@ lto = "fat"
 
 [[bin]]
 name = "chip8"
-path = "src/cli.rs"
+path = "src/bin/cli.rs"
 
 [dependencies]
 rand = "0.8"
@@ -27,8 +27,13 @@ criterion = "0.4"
 [[bench]]
 name = "maze"
 harness = false
+# FIXME: criterion is ignoring the feature defined here
+features = ["throttle"]
 
 [features]
 default = []
 
 op_trace = []
+
+# Turn off the CPU clock and run the interpreter as quickly as possible.
+throttle = []

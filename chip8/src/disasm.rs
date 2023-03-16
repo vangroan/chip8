@@ -1,7 +1,7 @@
 //! Disassembler.
 use std::fmt::{self, Write as FmtWrite};
 
-use crate::bytecode::*;
+use crate::{bytecode::*, constants::*};
 
 pub struct Disassembler<'a> {
     bytecode: &'a [u8],
@@ -32,49 +32,102 @@ impl<'a> Disassembler<'a> {
         let code = op_code(self.bytecode, self.cursor);
 
         match code {
-            0x00E0 => self.dis_simple(w, "Clear Screen"),
-            0x00EE => self.dis_simple(w, "Return"),
-            0x1 => self.dis_nnn(w, "Jump"),
-            0x2 => self.dis_nnn(w, "Call"),
-            0x3 => self.dis_xnn(w, "Skip Equal"),
-            0x4 => self.dis_xnn(w, "Skip Not-equal"),
-            0x5 => self.dis_xy(w, "Skip Equal"),
-            0x6 => self.dis_xnn(w, "Load"),
-            0x7 => self.dis_xnn(w, "Add"),
+            0x00E0 => self.dis_simple(w, "CLS"),
+            0x00EE => self.dis_simple(w, "RET"),
+            0x1 => self.dis_nnn(w, "JP"),
+            0x2 => self.dis_nnn(w, "CALL"),
+            0x3 => self.dis_xnn(w, "SE"),
+            0x4 => self.dis_xnn(w, "SNE"),
+            0x5 => self.dis_xy(w, "SE"),
+            0x6 => self.dis_xnn(w, "LD"),
+            0x7 => self.dis_xnn(w, "ADD"),
             0x8 => match op_n(self.bytecode, self.cursor) {
-                0x0 => self.dis_xy_op(w, "Load"),
+                0x0 => self.dis_xy_op(w, "LD"),
                 0x1 => self.dis_xy_op(w, "OR"),
                 0x2 => self.dis_xy_op(w, "AND"),
                 0x3 => self.dis_xy_op(w, "XOR"),
-                0x4 => self.dis_xy_op(w, "Add"),
-                0x5 => self.dis_xy_op(w, "Subtract"),
-                _ => Ok(()),
+                0x4 => self.dis_xy_op(w, "ADD"),
+                0x5 => self.dis_xy_op(w, "SUB"),
+                _ => self.write_unknown(w),
             },
-            _ => Ok(()),
+            0xA => self.dis_innn(w, "LD"),
+            0xC => self.dis_xnn(w, "RND"),
+            0xD => self.dis_xyn(w, "DRW"),
+            0xF => match op_nn(self.bytecode, self.cursor) {
+                0x07 => self.dis_xk(w, "LD", "DT"),
+                0x15 => self.dis_kx(w, "LD", "DT"),
+                0x18 => self.dis_kx(w, "LD", "ST"),
+                _ => self.write_unknown(w),
+            },
+            _ => self.write_unknown(w),
         }
     }
 
+    fn write_pc<W: FmtWrite>(&self, w: &mut W) -> fmt::Result {
+        write!(w, "0x{:04X}\t", MEM_START + self.cursor)
+    }
+
+    fn write_unknown<W: FmtWrite>(&self, w: &mut W) -> fmt::Result {
+        self.write_pc(w)?;
+        let a = self.bytecode.get(self.cursor).cloned().unwrap_or_default();
+        let b = self
+            .bytecode
+            .get(self.cursor + 1)
+            .cloned()
+            .unwrap_or_default();
+        writeln!(w, "{:02X}{:02X}\tUNKNOWN", a, b)
+    }
+
     fn dis_simple<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
-        writeln!(w, "{:04X}: {}", self.cursor, name)
+        self.write_pc(w)?;
+        writeln!(w, "{}", name)
     }
 
     fn dis_nnn<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
+        self.write_pc(w)?;
         let nnn = op_nnn(self.bytecode, self.cursor);
-        writeln!(w, "{:04X}: {} {:03X}", self.cursor, name, nnn)
+        writeln!(w, "{}\t0x{:03X}", name, nnn)
+    }
+
+    fn dis_innn<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
+        self.write_pc(w)?;
+        let nnn = op_nnn(self.bytecode, self.cursor);
+        writeln!(w, "{}\tI, 0x{:03X}", name, nnn)
     }
 
     fn dis_xnn<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
+        self.write_pc(w)?;
         let (vx, nn) = op_xnn(self.bytecode, self.cursor);
-        writeln!(w, "{:04X}: {} V{:02X} {:02X}", self.cursor, name, vx, nn)
+        writeln!(w, "{}\tV{:02X}, {:02X}", name, vx, nn)
+    }
+
+    fn dis_xyn<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
+        self.write_pc(w)?;
+        let (vx, vy, n) = op_xyn(self.bytecode, self.cursor);
+        writeln!(w, "{}\tV{:02X}, V{:02X}, {:02X}", name, vx, vy, n)
     }
 
     fn dis_xy<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
+        self.write_pc(w)?;
         let (vx, vy) = op_xy(self.bytecode, self.cursor);
-        writeln!(w, "{:04X}: {} V{:02X} V{:02X}", self.cursor, name, vx, vy)
+        writeln!(w, "{}\tV{:02X}, V{:02X}", name, vx, vy)
+    }
+
+    fn dis_xk<W: FmtWrite>(&self, w: &mut W, name: &str, k: &str) -> fmt::Result {
+        self.write_pc(w)?;
+        let vx = op_x(self.bytecode, self.cursor);
+        writeln!(w, "{}\tV{:02X}, {}", name, vx, k)
+    }
+
+    fn dis_kx<W: FmtWrite>(&self, w: &mut W, name: &str, k: &str) -> fmt::Result {
+        self.write_pc(w)?;
+        let vx = op_x(self.bytecode, self.cursor);
+        writeln!(w, "{}\t{}, V{:02X}", name, k, vx)
     }
 
     fn dis_xy_op<W: FmtWrite>(&self, w: &mut W, name: &str) -> fmt::Result {
+        self.write_pc(w)?;
         let (vx, vy) = op_xy(self.bytecode, self.cursor);
-        writeln!(w, "{:04X}: {} V{:02X} V{:02X}", self.cursor, name, vx, vy)
+        writeln!(w, "{}\tV{:02X}, V{:02X}", name, vx, vy)
     }
 }
