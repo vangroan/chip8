@@ -60,9 +60,6 @@ impl Chip8Vm {
 pub enum Flow {
     Error,
     Interrupt,
-    Draw,
-    Delay,
-    Jump,
 }
 
 /// VM Configuration Parameters.
@@ -91,7 +88,6 @@ impl Chip8Vm {
     fn guard_infinite(&mut self) -> bool {
         self.loop_counter += 1;
         if self.loop_counter > INFINITE_LOOP_LIMIT {
-            self.cpu.trap = true;
             true
         } else {
             false
@@ -117,7 +113,6 @@ impl Chip8Vm {
                     }
                 }
                 Flow::Interrupt => return Ok(Flow::Interrupt),
-                Flow::Draw | Flow::Delay | Flow::Jump => continue,
             }
         }
     }
@@ -166,7 +161,7 @@ impl Chip8Vm {
                 //
                 // Clear display
                 0x00E0 => {
-                    op_trace("CLS");
+                    op_trace("CLS", &self.cpu);
 
                     self.cpu.clear_display();
                     self.cpu.pc += 2;
@@ -177,7 +172,7 @@ impl Chip8Vm {
                 // Set the program counter to the value at the top of the stack.
                 // Subtract 1 from the stack pointer.
                 0x00EE => {
-                    op_trace("RET");
+                    op_trace("RET", &self.cpu);
 
                     self.cpu.pc = self.cpu.stack[self.cpu.sp] as usize;
                     self.cpu.sp -= 1;
@@ -192,10 +187,7 @@ impl Chip8Vm {
                     self.cpu.pc = address as usize;
 
                     if self.guard_infinite() {
-                        continue;
-                    } else {
-                        self.cpu.trap = true;
-                        return Flow::Jump;
+                        self.cpu.set_error("infinite loop guard");
                     }
                 }
                 // 2NNN (CALL addr)
@@ -468,9 +460,6 @@ impl Chip8Vm {
                     // If a pixel was erased, then a collision occurred.
                     self.cpu.registers[0xF] = is_erased as u8;
                     self.cpu.pc += 2;
-
-                    self.cpu.trap = true;
-                    return Flow::Draw;
                 }
                 0xE => match self.cpu.op_nn() {
                     0x9E => todo!("SKP Vx"),
@@ -580,7 +569,7 @@ impl Chip8Vm {
 
 #[cfg(feature = "op_trace")]
 #[inline]
-fn op_trace(name: &str) {
+fn op_trace(name: &str, cpu: &Chip8Cpu) {
     println!("{:04X}: {:4}", cpu.pc, name);
 }
 
@@ -618,14 +607,14 @@ fn op_trace_xy(name: &str, cpu: &Chip8Cpu) {
 #[cfg(feature = "op_trace")]
 #[inline]
 fn op_trace_xk(name: &str, cpu: &Chip8Cpu, k: &str) {
-    let vx = cpu.op_xk();
+    let vx = cpu.op_x();
     println!("{:04X}: {:4} V{:02X} {}", cpu.pc, name, vx, k);
 }
 
 #[cfg(feature = "op_trace")]
 #[inline]
 fn op_trace_kx(name: &str, cpu: &Chip8Cpu, k: &str) {
-    let vx = cpu.op_xk();
+    let vx = cpu.op_x();
     println!("{:04X}: {:4} {} V{:02X}", cpu.pc, name, k, vx);
 }
 
@@ -642,7 +631,7 @@ fn op_trace_xy_op(name: &str, cpu: &Chip8Cpu) {
 
 #[cfg(not(feature = "op_trace"))]
 #[inline]
-fn op_trace(_: &str) {}
+fn op_trace(_: &str, _: &Chip8Cpu) {}
 
 #[cfg(not(feature = "op_trace"))]
 #[inline]
