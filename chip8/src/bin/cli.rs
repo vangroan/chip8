@@ -9,7 +9,7 @@ const BYTECODE: &[u8] = include_bytes!("../../programs/maze");
 fn run_bytecode() -> Chip8Result<()> {
     println!("Running Bytecode Interpreter");
 
-    let mut vm = Chip8Vm::new();
+    let mut vm = Chip8Vm::new(Chip8Conf::default());
     vm.load_bytecode(BYTECODE)?;
 
     Disassembler::new(BYTECODE).print_bytecode();

@@ -1,33 +1,53 @@
 //! CPU Clock.
-use std::{thread, time::Instant};
-
-use crate::constants::*;
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
 
 /// Timer to synchronize thread with the software clock of the virtual CPU.
-/// 
+///
 /// It is designed to work with the yielding cooperative pattern
 /// of the interpreter loop. When the VM yields control back to the
 /// caller, time elapses until it is resumed. Once the interpreter
 /// is resumed, the elapsed time is taken into account when determining
 /// the next cycle.
-pub(crate) struct Clock(Instant);
+#[allow(dead_code)]
+pub(crate) struct Clock {
+    /// Expected duration of one clock cycle, in nanoseconds.
+    /// Stored as integer to avoid calculating nanos on each frame.
+    interval: u128,
+    /// Last time measuement
+    last: Instant,
+}
 
+#[allow(dead_code)]
 impl Clock {
     /// Creates a new clock with the current time as internal state.
-    pub(crate) fn new() -> Self {
-        Self(Instant::now())
+    pub(crate) fn new(interval: Duration) -> Self {
+        Self {
+            interval: interval.as_nanos(),
+            last: Instant::now(),
+        }
+    }
+
+    pub(crate) fn from_nanos(nano_seconds: u64) -> Self {
+        Self {
+            interval: nano_seconds as u128,
+            last: Instant::now(),
+        }
     }
 
     /// Set the clock state back to zero.
     pub(crate) fn reset(&mut self) {
-        self.0 = Instant::now()
+        self.last = Instant::now()
     }
 
     /// Block the current thread until the next clock cycle.
     pub(crate) fn wait(&mut self) {
         loop {
-            let elapsed = self.0.elapsed().as_nanos();
-            if elapsed < CLOCK_CYCLE_TIME {
+            let elapsed = self.last.elapsed().as_nanos();
+            // if elapsed < self.interval {
+            if elapsed < self.interval {
                 // Sleep does not have enough resolution, and causes
                 // the clock to run at 30 FPS.
                 //

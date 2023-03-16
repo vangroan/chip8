@@ -1,5 +1,5 @@
 //! Virtual machine.
-use std::fmt::Write;
+use std::{fmt::Write, time::Duration};
 
 use rand::prelude::*;
 
@@ -17,15 +17,22 @@ pub struct Chip8Vm {
     cpu: Chip8Cpu,
     clock: Clock,
     loop_counter: usize,
+    conf: Chip8Conf,
 }
 
 impl Chip8Vm {
-    pub fn new() -> Self {
+    pub fn new(conf: Chip8Conf) -> Self {
         Chip8Vm {
             cpu: Chip8Cpu::new(),
-            clock: Clock::new(),
+            clock: Clock::new(conf.clock_frequency.unwrap_or_default().into()),
             loop_counter: 0,
+            conf,
         }
+    }
+
+    /// Configuration that was used to instantiate the VM.
+    pub fn config(&self) -> &Chip8Conf {
+        &self.conf
     }
 
     pub fn load_bytecode(&mut self, bytecode: &[u8]) -> Chip8Result<()> {
@@ -54,6 +61,26 @@ pub enum Flow {
     Draw,
     Delay,
     Jump,
+}
+
+/// VM Configuration Parameters.
+#[derive(Default)]
+pub struct Chip8Conf {
+    pub clock_frequency: Option<Hz>,
+}
+
+/// CPU clock frequency, in hertz (per second)
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Hz(pub u64);
+
+impl Into<Duration> for Hz {
+    fn into(self) -> Duration {
+        if self.0 == 0 {
+            Duration::from_nanos(0)
+        } else {
+            Duration::from_nanos(NANOS_IN_SECOND / self.0)
+        }
+    }
 }
 
 /// Interpreter
@@ -101,7 +128,7 @@ impl Chip8Vm {
                 return Flow::Interrupt;
             }
 
-            #[cfg(not(feature = "turbo"))]
+            #[cfg(feature = "throttle")]
             self.clock.wait();
 
             // Each instruction is two bytes, with the opcode identity in the first 4-bit nibble.
@@ -565,3 +592,14 @@ fn op_trace_xy(_: &str, _: &Chip8Cpu) {}
 #[cfg(not(feature = "op_trace"))]
 #[inline]
 fn op_trace_xy_op(_: &str, _: &Chip8Cpu) {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_clock_hz() {
+        let interval: Duration = Hz(60).into();
+        assert_eq!(interval.as_millis(), 16);
+    }
+}

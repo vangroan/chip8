@@ -4,7 +4,7 @@ use chip8::prelude::*;
 
 fn criterion_benchmark(c: &mut Criterion) {
     {
-        let mut vm = Chip8Vm::new();
+        let mut vm = Chip8Vm::new(Chip8Conf::default());
         vm.load_bytecode(include_bytes!("../programs/maze"))
             .unwrap();
 
