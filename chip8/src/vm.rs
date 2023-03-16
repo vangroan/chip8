@@ -75,12 +75,12 @@ pub struct Chip8Conf {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Hz(pub u64);
 
-impl Into<Duration> for Hz {
-    fn into(self) -> Duration {
-        if self.0 == 0 {
+impl From<Hz> for Duration {
+    fn from(freq: Hz) -> Self {
+        if freq.0 == 0 {
             Duration::from_nanos(0)
         } else {
-            Duration::from_nanos(NANOS_IN_SECOND / self.0)
+            Duration::from_nanos(NANOS_IN_SECOND / freq.0)
         }
     }
 }
@@ -92,9 +92,10 @@ impl Chip8Vm {
         self.loop_counter += 1;
         if self.loop_counter > INFINITE_LOOP_LIMIT {
             self.cpu.trap = true;
-            return true;
+            true
+        } else {
+            false
         }
-        return false;
     }
 
     /// Clear internal state in preparation for a fresh startup.
