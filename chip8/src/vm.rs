@@ -87,11 +87,7 @@ impl Chip8Vm {
     // FIXME: Currently we can't break out of the infinite loops that programs use.
     fn guard_infinite(&mut self) -> bool {
         self.loop_counter += 1;
-        if self.loop_counter > INFINITE_LOOP_LIMIT {
-            true
-        } else {
-            false
-        }
+        self.loop_counter > INFINITE_LOOP_LIMIT
     }
 
     /// Clear internal state in preparation for a fresh startup.
@@ -104,16 +100,12 @@ impl Chip8Vm {
     pub fn execute(&mut self) -> Chip8Result<Flow> {
         self.reset();
 
-        loop {
-            match self.resume() {
-                Flow::Error => {
-                    return match self.cpu.error {
-                        Some(err) => Err(Chip8Error::Runtime(err)),
-                        None => Ok(Flow::Error),
-                    }
-                }
-                Flow::Interrupt => return Ok(Flow::Interrupt),
-            }
+        match self.resume() {
+            Flow::Error => match self.cpu.error {
+                Some(err) => Err(Chip8Error::Runtime(err)),
+                None => Ok(Flow::Error),
+            },
+            Flow::Interrupt => Ok(Flow::Interrupt),
         }
     }
 
