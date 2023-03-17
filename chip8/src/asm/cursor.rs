@@ -43,7 +43,7 @@ impl<'a> Cursor<'a> {
 
     /// Peek two characters ahead without advancing the cursor.
     #[allow(dead_code)]
-    pub(crate) fn peek2(&self) -> char {
+    pub fn peek2(&self) -> char {
         let mut iter = self.chars.clone();
         iter.next();
         iter.next().map(|(_, c)| c).unwrap_or(EOF_CHAR)
