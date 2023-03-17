@@ -51,6 +51,12 @@ impl Span {
     pub fn fragment<'a>(&self, text: &'a str) -> &'a str {
         &text[(self.index as usize)..(self.index as usize + self.size as usize)]
     }
+
+    /// Ending index of the span, exclusive.
+    #[inline]
+    pub fn end(&self) -> u32 {
+        self.index + self.size
+    }
 }
 
 /// Reserved keywords.

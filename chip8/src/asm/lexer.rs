@@ -136,6 +136,7 @@ impl<'a> Lexer<'a> {
         // next token, so the lexer's internal state is primed
         // for the next iteration.
         self.cursor.next();
+        debug_assert_eq!(self.cursor.offset(), token.span.end());
 
         token
     }
