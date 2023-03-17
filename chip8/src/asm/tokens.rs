@@ -75,6 +75,7 @@ pub enum Keyword {
     SkipKeyNot,   // SKNP
     Sub,          // SUB
     SubN,         // SUBN
+    System,       // SYS
     Random,       // RND
     Return,       // RET
     Xor,          // XOR
@@ -109,6 +110,7 @@ impl Keyword {
             "sknp" | "SKNP" => Some(Self::SkipKeyNot),
             "sub"  | "SUB"  => Some(Self::Sub),
             "subn" | "SUBN" => Some(Self::SubN),
+            "sys"  | "SYS"  => Some(Self::System),
             "rnd"  | "RAND" => Some(Self::Random),
             "ret"  | "RET"  => Some(Self::Return),
             "xor"  | "XOR"  => Some(Self::Xor),
@@ -129,7 +131,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_spoan_fragment() {
+    fn test_span_fragment() {
         const CODE: &str = "LD V0, 0xA4";
 
         let spans = &[
