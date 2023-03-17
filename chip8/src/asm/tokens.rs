@@ -1,7 +1,5 @@
 //! Tokens
 
-use std::str::FromStr;
-
 pub struct Token {
     pub span: Span,
     pub kind: TokenKind,
