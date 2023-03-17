@@ -6,14 +6,6 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[profile.release]
-# Increases runtime performance because
-# LLVM has more opportunities to inline functions.
-#
-# Slows down compilation.
-codegen-units = 1
-lto = "fat"
-
 [[bin]]
 name = "chip8"
 path = "src/bin/cli.rs"
@@ -27,8 +19,6 @@ criterion = "0.4"
 [[bench]]
 name = "maze"
 harness = false
-# FIXME: criterion is ignoring the feature defined here
-features = ["throttle"]
 
 [features]
 default = []

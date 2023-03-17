@@ -3,3 +3,11 @@
 members = [
     "chip8",
 ]
+
+[profile.release]
+# Increases runtime performance because
+# LLVM has more opportunities to inline functions.
+#
+# Slows down compilation.
+codegen-units = 1
+lto = "fat"
