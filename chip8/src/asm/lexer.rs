@@ -17,10 +17,23 @@ pub struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     pub fn new(source_code: &'a str) -> Self {
+        let mut cursor = Cursor::new(source_code);
+
+        // Initial state of the cursor is a non-existant EOF char,
+        // but the initial state of the lexer should be a valid
+        // token starting character.
+        //
+        // Prime the cursor for the first iteration.
+        cursor.next();
+
+        // For what it's worth, the cursor gets to decide what the
+        // initial byte position is.
+        let start_pos = cursor.offset();
+
         Self {
-            cursor: Cursor::new(source_code),
+            cursor,
             original: source_code,
-            start_pos: 0,
+            start_pos,
         }
     }
 
@@ -48,25 +61,56 @@ impl<'a> Lexer<'a> {
     pub fn next_token(&mut self) -> Token {
         use TokenKind as TK;
 
+        // Erase leading whitespace.
+        while is_whitespace(self.cursor.current()) {
+            self.cursor.next_char();
+        }
+
+        // Erase comment line.
+        if matches!(self.cursor.current(), ';') {
+            self.erase_comment();
+        }
+
+        // Assume that lexer initialization, or previous iteration,
+        // leaves the cursor at the next character.
         self.start_token();
 
-        match self.cursor.next_char() {
-            Some(',') => self.make_token(TK::Comma),
-            Some('.') => self.make_token(TK::Dot),
-            Some(':') => self.make_token(TK::Colon),
-            Some(';') => self.make_token(TK::Semicolon),
-            Some('\n') => {
-                if self.cursor.peek() == '\r' {
+        match self.cursor.current() {
+            ',' => self.make_token(TK::Comma),
+            '.' => self.make_token(TK::Dot),
+            ':' => self.make_token(TK::Colon),
+            ';' => self.make_token(TK::Semicolon),
+            '\r' => {
+                // Windows :(
+                if self.cursor.peek() == '\n' {
                     self.cursor.next();
                 }
                 self.make_token(TK::Newline)
             }
-            Some('_' | 'a'..='z' | 'A'..='Z') => self.make_ident(),
-            Some('0'..='9') => self.make_number(),
+            '\n' => self.make_token(TK::Newline),
+            '_' | 'a'..='z' | 'A'..='Z' => self.consume_ident(),
+            '0'..='9' => self.consume_number(),
 
-            None | Some(EOF_CHAR) => self.make_token(TK::EOF),
+            EOF_CHAR => self.make_token(TK::EOF),
             _ => self.make_token(TK::Unknown),
         }
+    }
+
+    /// Create a span using the starting position of the current token,
+    /// and the current offset of the cursor.
+    fn make_span(&self) -> Span {
+        let start = self.start_pos;
+        let end = self.cursor.peek_offset();
+
+        // start and end can be equal, and a token can have 0 size.
+        debug_assert!(end >= start);
+        let size = end - start;
+
+        Span { index: start, size }
+    }
+
+    fn fragment(&self) -> &str {
+        self.make_span().fragment(self.original)
     }
 
     /// Primes the lexer to consume the next token.
@@ -80,25 +124,18 @@ impl<'a> Lexer<'a> {
     ///
     /// Also prepare the cursor for the next iteration.
     fn make_token(&mut self, kind: TokenKind) -> Token {
-        let start = self.start_pos;
-        let end = self.cursor.peek_offset();
-
-        // start and end can be equal, and a token can have 0 size.
-        debug_assert!(end >= start);
-        let size = end - start;
-
         // After this token is built, the lexer's internal state
         // is no longer dedicated to this iteration, but to preparing
         // for the next iteration.
         let token = Token {
-            span: Span { index: start, size },
+            span: self.make_span(),
             kind,
         };
 
         // Position the cursor to the starting character for the
         // next token, so the lexer's internal state is primed
         // for the next iteration.
-        // self.cursor.bump();
+        self.cursor.next();
 
         token
     }
@@ -106,13 +143,80 @@ impl<'a> Lexer<'a> {
 
 /// Specialised tokens.
 impl<'a> Lexer<'a> {
-    /// Make an identifier token.
-    fn make_ident(&self) -> Token {
-        todo!()
+    /// Erase comment line up to, but not including, the trailing newline.
+    fn erase_comment(&mut self) {
+        debug_assert_eq!(self.cursor.current(), ';');
+
+        while !is_newline(self.cursor.current()) {
+            self.cursor.next();
+        }
     }
 
-    /// make a number literal token.
-    fn make_number(&self) -> Token {
-        todo!()
+    /// Make an identifier token.
+    fn consume_ident(&mut self) -> Token {
+        debug_assert!(is_letter(self.cursor.current()));
+
+        while is_letter_or_digit(self.cursor.peek()) {
+            self.cursor.next();
+        }
+
+        // Attempt to convert identifier to keyword.
+        let token_kind = match Keyword::parse(self.fragment()) {
+            Some(keyword) => TokenKind::Keyword(keyword),
+            None => TokenKind::Ident,
+        };
+
+        self.make_token(token_kind)
     }
+
+    /// Make a number literal token.
+    fn consume_number(&mut self) -> Token {
+        debug_assert!(is_digit(self.cursor.current()));
+
+        // // Consume the starting character from
+        // // before this function was entered.
+        // self.cursor.next();
+
+        // Number format marker located in second position.
+        if matches!(self.cursor.peek(), 'b' | 'x') {
+            self.cursor.next();
+        }
+
+        while is_digit(self.cursor.peek()) {
+            self.cursor.next();
+        }
+
+        self.make_token(TokenKind::Number)
+    }
+}
+
+/// Test whether the character is considered whitespace
+/// that should be ignored by the parser later.
+///
+/// Doesn't include newline characters, because newlines
+/// are significant, specifying end-of-statement.
+fn is_whitespace(c: char) -> bool {
+    matches!(
+        c,
+        '\u{0020}' // space
+            | '\u{0009}' // tab
+            | '\u{00A0}' // no-break space
+            | '\u{FEFF}' // zero width no-break space
+    )
+}
+
+fn is_newline(c: char) -> bool {
+    matches!(c, '\r' | '\n')
+}
+
+fn is_digit(c: char) -> bool {
+    matches!(c, '0'..='9')
+}
+
+fn is_letter(c: char) -> bool {
+    matches!(c, 'a'..='z' | 'A'..='Z' | '_')
+}
+
+fn is_letter_or_digit(c: char) -> bool {
+    is_letter(c) || is_digit(c)
 }

@@ -36,10 +36,12 @@ pub fn op_xnn(bytecode: &[u8], cursor: usize) -> (u8, u8) {
 #[inline(always)]
 pub fn op_xyn(bytecode: &[u8], cursor: usize) -> (u8, u8, u8) {
     // Opcode is in upper nibble and needs to be masked out.
-    let op = bytecode[cursor] & 0b1111;
-    let data = bytecode[cursor + 1];
+    let x = bytecode[cursor] & 0b1111;
+    let next = bytecode[cursor + 1];
+    let y = (next & 0b1111_0000) >> 4;
+    let n = next & 0b1111;
 
-    (op, (data & 0b1111_0000) >> 4, data & 0b1111)
+    (x, y, n)
 }
 
 /// Extract operands VX and VY from the buffer at the cursor.

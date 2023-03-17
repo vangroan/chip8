@@ -35,6 +35,8 @@ fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
 }
 
 fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
+    use TokenKind as TK;
+
     println!("Running Assembler");
 
     let file_bytes = fs::read(filepath.as_ref())?;
@@ -44,10 +46,21 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
 
     loop {
         let token = lexer.next_token();
-        println!(
-            "{:6}:{} {:?}",
-            token.span.index, token.span.size, token.kind
-        );
+
+        match token.kind {
+            TK::EOF | TK::Newline => println!(
+                "{:6}:{} {:?}",
+                token.span.index, token.span.size, token.kind
+            ),
+            _ => println!(
+                "{:6}:{} {:?} \"{}\"",
+                token.span.index,
+                token.span.size,
+                token.kind,
+                token.span.fragment(lexer.source_code())
+            ),
+        }
+
         if matches!(token.kind, TokenKind::EOF) {
             break;
         }

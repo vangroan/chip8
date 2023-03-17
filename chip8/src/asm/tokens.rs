@@ -22,7 +22,7 @@ pub enum TokenKind {
     // Complex
     Ident,
     /// Reserved identifiers
-    Keyword,
+    Keyword(Keyword),
     /// String literal
     String,
     /// Number literal
@@ -48,12 +48,13 @@ impl Span {
     }
 
     #[inline]
-    pub fn fragment<'a>(&'a self, text: &'a str) -> &str {
+    pub fn fragment<'a>(&self, text: &'a str) -> &'a str {
         &text[(self.index as usize)..(self.index as usize + self.size as usize)]
     }
 }
 
 /// Reserved keywords.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum Keyword {
