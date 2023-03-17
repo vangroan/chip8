@@ -1,5 +1,9 @@
 //! Result and errors.
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    io,
+    string::FromUtf8Error,
+};
 
 pub type Chip8Result<T> = std::result::Result<T, Chip8Error>;
 
@@ -10,6 +14,8 @@ pub enum Chip8Error {
     /// Attempt to load a bytecode program that can't fit in memory.
     LargeProgram,
     Fmt(fmt::Error),
+    Io(io::Error),
+    Utf8(FromUtf8Error),
 }
 
 impl Display for Chip8Error {
@@ -18,6 +24,8 @@ impl Display for Chip8Error {
             Self::Runtime(msg) => write!(f, "runtime error: {}", msg),
             Self::LargeProgram => write!(f, "program too large for VM memory"),
             Self::Fmt(err) => write!(f, "{}", err),
+            Self::Io(err) => write!(f, "{}", err),
+            Self::Utf8(err) => write!(f, "{}", err),
         }
     }
 }
@@ -27,5 +35,17 @@ impl std::error::Error for Chip8Error {}
 impl From<fmt::Error> for Chip8Error {
     fn from(err: fmt::Error) -> Self {
         Chip8Error::Fmt(err)
+    }
+}
+
+impl From<io::Error> for Chip8Error {
+    fn from(err: io::Error) -> Self {
+        Chip8Error::Io(err)
+    }
+}
+
+impl From<FromUtf8Error> for Chip8Error {
+    fn from(err: FromUtf8Error) -> Self {
+        Chip8Error::Utf8(err)
     }
 }

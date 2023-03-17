@@ -101,6 +101,13 @@ impl<'a> Cursor<'a> {
             }
         }
     }
+
+    /// Advances the cursor to the next character.
+    ///
+    /// Returns `None` if the cursor is end-of-file.
+    pub fn next_char(&mut self) -> Option<char> {
+        self.next().map(|(_, c)| c)
+    }
 }
 
 #[cfg(test)]

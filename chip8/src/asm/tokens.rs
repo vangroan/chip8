@@ -1,5 +1,6 @@
 //! Tokens
 
+#[derive(Debug)]
 pub struct Token {
     pub span: Span,
     pub kind: TokenKind,
@@ -35,6 +36,7 @@ pub enum TokenKind {
     EOF,
 }
 
+#[derive(Debug)]
 pub struct Span {
     pub index: u32,
     pub size: u32,

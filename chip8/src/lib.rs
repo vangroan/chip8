@@ -1,4 +1,4 @@
-mod asm;
+pub mod asm;
 mod bytecode;
 mod clock;
 pub mod constants;
