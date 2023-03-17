@@ -39,7 +39,7 @@ impl<'a> Lexer<'a> {
 
     /// Original source code that was passed in during construction.
     pub fn source_code(&self) -> &str {
-        &self.original
+        self.original
     }
 
     /// Scan the source characters and construct the next token.
@@ -209,6 +209,7 @@ fn is_newline(c: char) -> bool {
     matches!(c, '\r' | '\n')
 }
 
+#[allow(clippy::manual_is_ascii_check)] // consistency with other functions
 fn is_digit(c: char) -> bool {
     matches!(c, '0'..='9')
 }

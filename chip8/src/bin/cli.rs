@@ -1,5 +1,4 @@
 //! Entrypoint for CLI
-
 use std::{env, error::Error, fs, time::Instant};
 
 use chip8::{
@@ -7,15 +6,15 @@ use chip8::{
     prelude::*,
 };
 
-const BYTECODE: &[u8] = include_bytes!("../../programs/maze");
-
 fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
     println!("Running Bytecode Interpreter");
 
-    let mut vm = Chip8Vm::new(Chip8Conf::default());
-    vm.load_bytecode(BYTECODE)?;
+    let bytecode = fs::read(filepath.as_ref())?;
 
-    Disassembler::new(BYTECODE).print_bytecode();
+    let mut vm = Chip8Vm::new(Chip8Conf::default());
+    vm.load_bytecode(bytecode.as_slice())?;
+
+    Disassembler::new(bytecode.as_slice()).print_bytecode();
 
     // println!("{}", vm.dump_ram(include_bytes!("../programs/maze").len())?);
 
@@ -83,7 +82,6 @@ fn parse_args() -> Option<Cmd> {
     let mut args = env::args().skip(1);
     match args.next() {
         Some(cmd) => {
-            println!("arg 1: {} {}", cmd, cmd.len());
             // don't format me T.T
             match cmd.as_str() {
                 "run" => Some(Cmd::Run {
@@ -100,7 +98,6 @@ fn parse_args() -> Option<Cmd> {
             }
         }
         None => {
-            println!("no arg");
             print_usage();
             None
         }

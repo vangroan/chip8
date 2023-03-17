@@ -14,6 +14,7 @@ pub struct Cursor<'a> {
     original: &'a str,
 }
 
+#[allow(dead_code)]
 impl<'a> Cursor<'a> {
     pub fn new(text: &'a str) -> Self {
         Self {
