@@ -173,10 +173,6 @@ impl<'a> Lexer<'a> {
     fn consume_number(&mut self) -> Token {
         debug_assert!(is_digit(self.cursor.current()));
 
-        // // Consume the starting character from
-        // // before this function was entered.
-        // self.cursor.next();
-
         // Number format marker located in second position.
         if matches!(self.cursor.peek(), 'b' | 'x') {
             self.cursor.next();
