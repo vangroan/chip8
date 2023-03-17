@@ -2,7 +2,7 @@
 use std::{env, error::Error, fs, time::Instant};
 
 use chip8::{
-    asm::{Lexer, TokenKind},
+    asm::{Assembler, Lexer, TokenKind},
     prelude::*,
 };
 
@@ -62,6 +62,16 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
 
         if matches!(token.kind, TokenKind::EOF) {
             break;
+        }
+    }
+
+    {
+        let lexer = Lexer::new(source_code.as_str());
+        let asm = Assembler::new(lexer);
+
+        match asm.parse() {
+            Ok(_bytecode) => {}
+            Err(err) => eprintln!("{}", err),
         }
     }
 

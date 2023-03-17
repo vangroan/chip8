@@ -1,5 +1,7 @@
 //! Tokens
 
+use std::ops;
+
 #[derive(Debug)]
 pub struct Token {
     pub span: Span,
@@ -36,7 +38,7 @@ pub enum TokenKind {
     EOF,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Span {
     pub index: u32,
     pub size: u32,
@@ -56,6 +58,60 @@ impl Span {
     #[inline]
     pub fn end(&self) -> u32 {
         self.index + self.size
+    }
+
+    pub fn surrounding_line<'a>(&self, text: &'a str) -> (&'a str, Span) {
+        const NEWLINE: char = '\n';
+        const RETURN: char = '\r';
+
+        let mut chars = text.char_indices().peekable();
+        let mut start = 0;
+        let mut end = text.len();
+
+        while let Some((i, c)) = chars.next() {
+            if i < self.index as usize {
+                if c == NEWLINE {
+                    // Span not found yet, move the starting cursor to the next line.
+
+                    if chars.peek().map(|(_, c)| *c) == Some(RETURN) {
+                        chars.next();
+                    }
+
+                    // Line starts at the character after the newline (\n) and carriage return (\r)
+                    if let Some((i, _)) = chars.peek() {
+                        start = *i;
+                    }
+                }
+            } else if i >= self.end() as usize {
+                if c == NEWLINE {
+                    end = i + 1;
+
+                    if chars.peek().map(|(_, c)| *c) == Some(RETURN) {
+                        chars.next();
+                        end += 1;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        let line_span = Span {
+            index: start as u32,
+            size: end as u32 - start as u32,
+        };
+
+        (&text[start..end], line_span)
+    }
+}
+
+impl ops::Add for Span {
+    type Output = Span;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let index = u32::min(self.index, rhs.index);
+        let size = u32::max(self.end(), rhs.end()) - index;
+        Span { index, size }
     }
 }
 
@@ -152,5 +208,44 @@ mod test {
         assert_eq!(spans[1].fragment(CODE), "V0");
         assert_eq!(spans[2].fragment(CODE), ",");
         assert_eq!(spans[3].fragment(CODE), "0xA4");
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_span_surrounding_line() {
+        const CODE: &str = "------------\n....here....\n------------";
+
+        let span = Span::new(17, 4);
+        assert_eq!(span.fragment(CODE), "here");
+
+        let (line, line_span) = span.surrounding_line(CODE);
+        assert_eq!(line, "....here....\n");
+        assert_eq!(line_span, Span { index: 13, size: 13 });
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_span_surrounding_line_cr() {
+        const CODE: &str = "------------\n\r....here....\n\r------------";
+
+        let span = Span::new(18, 4);
+        assert_eq!(span.fragment(CODE), "here");
+
+        let (line, line_span) = span.surrounding_line(CODE);
+        assert_eq!(line, "....here....\n\r");
+        assert_eq!(line_span, Span { index: 14, size: 14 });
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_span_surrounding_full_text() {
+        const CODE: &str = "....here....";
+
+        let span = Span::new(4, 4);
+        assert_eq!(span.fragment(CODE), "here");
+
+        let (line, line_span) = span.surrounding_line(CODE);
+        assert_eq!(line, "....here....");
+        assert_eq!(line_span, Span { index: 0, size: 12 });
     }
 }

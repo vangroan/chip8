@@ -5,6 +5,8 @@ use std::{
     string::FromUtf8Error,
 };
 
+use crate::asm::{Span, Token};
+
 pub type Chip8Result<T> = std::result::Result<T, Chip8Error>;
 
 #[derive(Debug)]
@@ -13,16 +15,18 @@ pub enum Chip8Error {
     Runtime(&'static str),
     /// Attempt to load a bytecode program that can't fit in memory.
     LargeProgram,
+    Asm(AsmError),
     Fmt(fmt::Error),
     Io(io::Error),
     Utf8(FromUtf8Error),
 }
 
 impl Display for Chip8Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Runtime(msg) => write!(f, "runtime error: {}", msg),
             Self::LargeProgram => write!(f, "program too large for VM memory"),
+            Self::Asm(err) => write!(f, "parser error: {}", err),
             Self::Fmt(err) => write!(f, "{}", err),
             Self::Io(err) => write!(f, "{}", err),
             Self::Utf8(err) => write!(f, "{}", err),
@@ -47,5 +51,78 @@ impl From<io::Error> for Chip8Error {
 impl From<FromUtf8Error> for Chip8Error {
     fn from(err: FromUtf8Error) -> Self {
         Chip8Error::Utf8(err)
+    }
+}
+
+#[derive(Debug)]
+pub struct AsmError {
+    pub token: Token,
+    pub line: String,
+    pub line_span: Span,
+    pub line_no: usize,
+    pub message: String,
+}
+
+impl AsmError {
+    const MARKER: u8 = 0x5E; // caret (^)
+    const SPACE: u8 = 0x20; // space ( )
+
+    pub fn new(source_code: impl AsRef<str>, token: Token, message: impl ToString) -> Self {
+        let (line, line_span) = token.span.surrounding_line(source_code.as_ref());
+        let line_no = Self::count_lines(source_code.as_ref(), token.span.index as usize);
+
+        Self {
+            token,
+            line: line.to_string(),
+            line_span,
+            line_no,
+            message: message.to_string(),
+        }
+    }
+
+    pub fn count_lines(text: &str, index: usize) -> usize {
+        let mut count = 0;
+
+        for (i, c) in text.char_indices() {
+            if i >= index {
+                break;
+            }
+
+            if c == '\n' {
+                count += 1;
+            }
+        }
+
+        count
+    }
+}
+
+impl Display for AsmError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        writeln!(f, "{}", self.message)?;
+
+        let lineno = format!("{:3}", self.line_no);
+        let indent = String::from_utf8(vec![Self::SPACE; lineno.len()]).unwrap_or_default();
+        writeln!(f, "{} |", indent)?;
+
+        writeln!(f, "{} | {}", lineno, self.line.trim_end())?;
+        //           ^^^^^ indent
+
+        const INDENT: usize = 0;
+        let relative_index = (self.token.span.index - self.line_span.index) as usize;
+        let indent2 =
+            String::from_utf8(vec![Self::SPACE; indent.len() + relative_index]).unwrap_or_default();
+        let marker = String::from_utf8(vec![Self::MARKER; self.token.span.size as usize])
+            .unwrap_or_default();
+        writeln!(f, "{} |{}{}", indent, indent2, marker)?;
+        writeln!(f, "{} |", indent)?;
+
+        Ok(())
+    }
+}
+
+impl From<AsmError> for Chip8Error {
+    fn from(err: AsmError) -> Self {
+        Chip8Error::Asm(err)
     }
 }
