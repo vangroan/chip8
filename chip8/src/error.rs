@@ -2,6 +2,7 @@
 use std::{
     fmt::{self, Display, Formatter},
     io,
+    num::ParseIntError,
     string::FromUtf8Error,
 };
 
@@ -16,6 +17,7 @@ pub enum Chip8Error {
     /// Attempt to load a bytecode program that can't fit in memory.
     LargeProgram,
     Asm(AsmError),
+    NumberParse(ParseIntError),
     Token(TokenError),
     EOF,
     Fmt(fmt::Error),
@@ -29,6 +31,7 @@ impl Display for Chip8Error {
             Self::Runtime(msg) => write!(f, "runtime error: {}", msg),
             Self::LargeProgram => write!(f, "program too large for VM memory"),
             Self::Asm(err) => write!(f, "parser error: {}", err),
+            Self::NumberParse(err) => write!(f, "failed to parse number literal: {err}"),
             Self::Token(err) => write!(f, "token error: {}", err),
             Self::EOF => write!(f, "unexpected end-of-file"),
             Self::Fmt(err) => write!(f, "{}", err),

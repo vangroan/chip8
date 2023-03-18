@@ -1,8 +1,16 @@
 //! Assembler
 
-use crate::error::{AsmError, Chip8Error, Chip8Result};
+use crate::{
+    bytecode::{opcodes::*, *},
+    error::{AsmError, Chip8Error, Chip8Result},
+};
 
-use super::{lexer::Lexer, token_stream::TokenStream, tokens::TokenKind, Keyword, Token};
+use super::{
+    lexer::Lexer,
+    token_stream::TokenStream,
+    tokens::{NumFormat, Number, TokenKind},
+    Keyword, Token,
+};
 
 pub struct Assembler<'a> {
     stream: TokenStream<'a>,
@@ -39,7 +47,7 @@ impl<'a> Assembler<'a> {
                         TokenKind::EOF => break,
                         _ => {
                             let token = self.stream.next_token().unwrap();
-                            let message = format!("unsupported token {:?}", token.kind);
+                            let message = format!("expected opcode, found {:?}", token.kind);
                             return Err(self.error(token, message));
                         }
                     }
@@ -73,6 +81,12 @@ impl<'a> Assembler<'a> {
             self.next_offset(),
         ));
     }
+
+    fn emit(&mut self, instr: [u8; 2]) {
+        println!("push: {:02X} {:02X}", instr[0], instr[1]);
+        self.bytecode.push(instr[0]);
+        self.bytecode.push(instr[1]);
+    }
 }
 
 impl<'a> Assembler<'a> {
@@ -103,6 +117,31 @@ impl<'a> Assembler<'a> {
             .map(|kind| format!("{:?}", kind))
             .collect::<Vec<_>>();
         panic!("expected one of: {}", kind_names.join(", "))
+    }
+
+    fn parse_number(&self, token: Token) -> Chip8Result<Number> {
+        use NumFormat as NF;
+
+        let fragment = self.stream.span_fragment(&token.span);
+        println!("fragment {fragment}");
+
+        // All digits are ASCII, so we can cast the UTF-8 string to bytes
+        // and treat every byte as a character.
+        let bytes = fragment.as_bytes();
+
+        let (format, parse_result) = if bytes[0] == b'0' {
+            match bytes.get(1) {
+                Some(b'b') => (NF::Bin, u16::from_str_radix(slice_number(fragment), 2)),
+                Some(b'x') => (NF::Hex, u16::from_str_radix(slice_number(fragment), 16)),
+                _ => (NF::Dec, u16::from_str_radix(fragment, 10)),
+            }
+        } else {
+            (NF::Dec, u16::from_str_radix(fragment, 10))
+        };
+
+        let value = parse_result.map_err(|err| Chip8Error::NumberParse(err))?;
+
+        Ok(Number { value, format })
     }
 
     fn parse_label(&mut self) -> Chip8Result<()> {
@@ -142,12 +181,76 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    /// LD
+    /// Load
+    ///
+    /// - 6XNN (LD Vx, byte)
+    /// - ANNN (LD I, addr)
+    /// - Fx07 (LD Vx, DT)
+    /// - Fx0A (LD Vx, K)
+    /// - Fx15 (LD DT, Vx)
+    /// - Fx18 (LD ST, Vx)
+    /// - Fx29 (LD F, Vx)
+    /// - Fx33 (LD B, Vx)
+    /// - Fx55 (LD [I], Vx)
+    /// - Fx65 (LD Vx, [I])
     fn parse_load(&mut self, name: Token) -> Chip8Result<()> {
-        let _dst = self.stream.next_token();
-        let _comma = self.stream.next_token();
-        let _src = self.stream.next_token();
-        let _newline = self.stream.next_token();
-        Err(self.error(name, "todo"))
+        let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+
+        match dst.kind {
+            TokenKind::Keyword(kw) => match kw {
+                // 6XNN (LD Vx, byte)
+                //
+                // Load byte literal into Vx register
+                kw if is_vregister(kw) => {
+                    let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                    self.stream.consume(TokenKind::Comma)?;
+                    let literal = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+                    let nn = self.parse_number(literal)?;
+                    self.emit(encode_xnn(LD_VX_BYTE, vx, nn.as_u8()))
+                }
+                _ => return Err(self.error(name, "todo")),
+            },
+            _ => return Err(self.error(name, "todo")),
+        }
+
+        let _newline = self.stream.consume(TokenKind::Newline);
+
+        println!("{:?}", self.bytecode);
+
+        // Err(self.error(name, "todo"))
+        Ok(())
+    }
+}
+
+fn is_vregister(keyword: Keyword) -> bool {
+    use Keyword as K;
+    matches!(
+        keyword,
+        K::V0
+            | K::V1
+            | K::V2
+            | K::V3
+            | K::V4
+            | K::V5
+            | K::V6
+            | K::V7
+            | K::V8
+            | K::V9
+            | K::VA
+            | K::VB
+            | K::VC
+            | K::VD
+            | K::VE
+            | K::VF
+    )
+}
+
+fn slice_number(fragment: &str) -> &str {
+    let rest = &fragment[2..];
+    println!("fragment {fragment} rest {rest}");
+    if rest == "" {
+        "0"
+    } else {
+        rest
     }
 }

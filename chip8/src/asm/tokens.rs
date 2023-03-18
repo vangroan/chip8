@@ -151,6 +151,23 @@ pub enum Keyword {
     Index,     // I
     Key,       // K
     Sound,     // ST
+
+    V0,
+    V1,
+    V2,
+    V3,
+    V4,
+    V5,
+    V6,
+    V7,
+    V8,
+    V9,
+    VA,
+    VB,
+    VC,
+    VD,
+    VE,
+    VF,
 }
 
 impl Keyword {
@@ -184,8 +201,68 @@ impl Keyword {
             "K"   => Some(Self::Key),
             "ST"  => Some(Self::Sound),
             // ----------------------------------------------------------------
+            "v0" | "V0" => Some(Self::V0),
+            "v1" | "V1" => Some(Self::V1),
+            "v2" | "V2" => Some(Self::V2),
+            "v3" | "V3" => Some(Self::V3),
+            "v4" | "V4" => Some(Self::V4),
+            "v5" | "V5" => Some(Self::V5),
+            "v6" | "V6" => Some(Self::V6),
+            "v7" | "V7" => Some(Self::V7),
+            "v8" | "V8" => Some(Self::V8),
+            "v9" | "V9" => Some(Self::V9),
+            "va" | "VA" | "v10" | "V10" => Some(Self::VA),
+            "vb" | "VB" | "v11" | "V11" => Some(Self::VB),
+            "vc" | "VC" | "v12" | "V12" => Some(Self::VC),
+            "vd" | "VD" | "v13" | "V13" => Some(Self::VD),
+            "ve" | "VE" | "v14" | "V14" => Some(Self::VE),
+            "vf" | "VF" | "v15" | "V15" => Some(Self::VF),
+
             _ => None,
         }
+    }
+
+    /// Convert the keyword to a register index, if it's V0-VF.
+    pub fn as_vregister(&self) -> Option<u8> {
+        match self {
+            Self::V0 => Some(0),
+            Self::V1 => Some(1),
+            Self::V2 => Some(2),
+            Self::V3 => Some(3),
+            Self::V4 => Some(4),
+            Self::V5 => Some(5),
+            Self::V6 => Some(6),
+            Self::V7 => Some(7),
+            Self::V8 => Some(8),
+            Self::V9 => Some(9),
+            Self::VA => Some(10),
+            Self::VB => Some(11),
+            Self::VC => Some(12),
+            Self::VD => Some(13),
+            Self::VE => Some(14),
+            Self::VF => Some(15),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Number {
+    pub value: u16,
+    pub format: NumFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum NumFormat {
+    Bin = 2,
+    Dec = 10,
+    Hex = 16,
+}
+
+impl Number {
+    pub fn as_u8(&self) -> u8 {
+        self.value as u8
     }
 }
 

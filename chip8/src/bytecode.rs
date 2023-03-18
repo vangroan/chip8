@@ -1,6 +1,11 @@
 /// Helpers for extracting data from opcodes.
 use crate::constants::*;
 
+pub mod opcodes {
+    /// Load (LD Vx, byte)
+    pub const LD_VX_BYTE: u8 = 0x6;
+}
+
 /// Returns true if the program can fit in VM memory.
 #[inline]
 pub(crate) fn check_program_size(program: &[u8]) -> bool {
@@ -68,4 +73,9 @@ pub fn op_x(bytecode: &[u8], cursor: usize) -> u8 {
 pub fn op_n(bytecode: &[u8], cursor: usize) -> u8 {
     let data = bytecode[cursor + 1];
     data & 0b1111
+}
+
+pub fn encode_xnn(opcode: u8, vx: u8, nn: u8) -> [u8; 2] {
+    println!("encode {:02X} {:02X} {:02X}", opcode, vx, nn);
+    [(opcode << 4) | (vx & 0xF), nn]
 }

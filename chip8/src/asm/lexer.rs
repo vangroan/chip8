@@ -184,11 +184,11 @@ impl<'a> Lexer<'a> {
         debug_assert!(is_digit(self.cursor.current()));
 
         // Number format marker located in second position.
-        if matches!(self.cursor.peek(), 'b' | 'x') {
+        if self.cursor.current() == '0' && matches!(self.cursor.peek(), 'b' | 'x') {
             self.cursor.next();
         }
 
-        while is_digit(self.cursor.peek()) {
+        while is_hex_letter(self.cursor.peek()) {
             self.cursor.next();
         }
 
@@ -218,6 +218,10 @@ fn is_newline(c: char) -> bool {
 #[allow(clippy::manual_is_ascii_check)] // consistency with other functions
 fn is_digit(c: char) -> bool {
     matches!(c, '0'..='9')
+}
+
+fn is_hex_letter(c: char) -> bool {
+    matches!(c, 'a'..='f' | 'A'..='F')
 }
 
 fn is_letter(c: char) -> bool {

@@ -70,7 +70,7 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
         let asm = Assembler::new(lexer);
 
         match asm.parse() {
-            Ok(_bytecode) => {}
+            Ok(bytecode) => println!("{bytecode:?}"),
             Err(err) => eprintln!("{}", err),
         }
     }
