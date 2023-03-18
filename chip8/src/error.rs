@@ -5,7 +5,7 @@ use std::{
     string::FromUtf8Error,
 };
 
-use crate::asm::{Span, Token};
+use crate::asm::{Span, Token, TokenKind};
 
 pub type Chip8Result<T> = std::result::Result<T, Chip8Error>;
 
@@ -16,6 +16,8 @@ pub enum Chip8Error {
     /// Attempt to load a bytecode program that can't fit in memory.
     LargeProgram,
     Asm(AsmError),
+    Token(TokenError),
+    EOF,
     Fmt(fmt::Error),
     Io(io::Error),
     Utf8(FromUtf8Error),
@@ -27,6 +29,8 @@ impl Display for Chip8Error {
             Self::Runtime(msg) => write!(f, "runtime error: {}", msg),
             Self::LargeProgram => write!(f, "program too large for VM memory"),
             Self::Asm(err) => write!(f, "parser error: {}", err),
+            Self::Token(err) => write!(f, "token error: {}", err),
+            Self::EOF => write!(f, "unexpected end-of-file"),
             Self::Fmt(err) => write!(f, "{}", err),
             Self::Io(err) => write!(f, "{}", err),
             Self::Utf8(err) => write!(f, "{}", err),
@@ -102,20 +106,22 @@ impl Display for AsmError {
         writeln!(f, "{}", self.message)?;
 
         let lineno = format!("{:3}", self.line_no);
-        let indent = String::from_utf8(vec![Self::SPACE; lineno.len()]).unwrap_or_default();
-        writeln!(f, "{} |", indent)?;
+        let margin = String::from_utf8(vec![Self::SPACE; lineno.len()]).unwrap_or_default();
+        writeln!(f, "{} |", margin)?;
 
         writeln!(f, "{} | {}", lineno, self.line.trim_end())?;
-        //           ^^^^^ indent
+        //           ^^ margin
+        //               ^ padding
 
-        const INDENT: usize = 0;
+        const PADDING: usize = 1;
         let relative_index = (self.token.span.index - self.line_span.index) as usize;
-        let indent2 =
-            String::from_utf8(vec![Self::SPACE; indent.len() + relative_index]).unwrap_or_default();
+        // println!("relative index: {}", relative_index);
+        let indent =
+            String::from_utf8(vec![Self::SPACE; PADDING + relative_index]).unwrap_or_default();
         let marker = String::from_utf8(vec![Self::MARKER; self.token.span.size as usize])
             .unwrap_or_default();
-        writeln!(f, "{} |{}{}", indent, indent2, marker)?;
-        writeln!(f, "{} |", indent)?;
+        writeln!(f, "{} |{}{}", margin, indent, marker)?;
+        writeln!(f, "{} |", margin)?;
 
         Ok(())
     }
@@ -124,5 +130,30 @@ impl Display for AsmError {
 impl From<AsmError> for Chip8Error {
     fn from(err: AsmError) -> Self {
         Chip8Error::Asm(err)
+    }
+}
+
+/// Error returned when an unexpected token type is encountered.
+#[derive(Debug)]
+pub struct TokenError {
+    pub expected: TokenKind,
+    pub encountered: TokenKind,
+}
+
+impl std::error::Error for TokenError {}
+
+impl std::fmt::Display for TokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "encountered token '{:?}', expected '{:?}'",
+            self.encountered, self.expected
+        )
+    }
+}
+
+impl From<TokenError> for Chip8Error {
+    fn from(err: TokenError) -> Self {
+        Chip8Error::Token(err)
     }
 }

@@ -2,6 +2,7 @@
 mod assembler;
 mod cursor;
 mod lexer;
+mod token_stream;
 mod tokens;
 
 pub fn assemble(source_code: impl AsRef<str>) -> Vec<u8> {

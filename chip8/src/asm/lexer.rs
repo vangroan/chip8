@@ -38,7 +38,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Original source code that was passed in during construction.
-    pub fn source_code(&self) -> &str {
+    pub fn source_code(&self) -> &'a str {
         self.original
     }
 
@@ -94,6 +94,15 @@ impl<'a> Lexer<'a> {
             EOF_CHAR => self.make_token(TK::EOF),
             _ => self.make_token(TK::Unknown),
         }
+    }
+
+    /// Indicates whether the lexer is at the end of the source.
+    ///
+    /// Note that source can contain '\0' (end-of-file) characters,
+    /// but not be at the actual end. It's thus important to verify
+    /// with this function whenever a [`TokenKind::EOF`] is encountered.
+    pub fn at_end(&self) -> bool {
+        self.cursor.at_end()
     }
 
     /// Create a span using the starting position of the current token,
@@ -217,4 +226,42 @@ fn is_letter(c: char) -> bool {
 
 fn is_letter_or_digit(c: char) -> bool {
     is_letter(c) || is_digit(c)
+}
+
+impl<'a> IntoIterator for Lexer<'a> {
+    type Item = Token;
+    type IntoIter = LexerIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        LexerIter {
+            lexer: self,
+            done: false,
+        }
+    }
+}
+
+/// Convenience iterator that wraps the lexer.
+#[must_use = "iterators are lazy and do nothing unless consumed"]
+pub struct LexerIter<'a> {
+    // Track end so an EOF token is emitted once.
+    done: bool,
+    lexer: Lexer<'a>,
+}
+
+impl<'a> Iterator for LexerIter<'a> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.lexer.at_end() {
+            if self.done {
+                None
+            } else {
+                // Emit that last EOF token
+                self.done = true;
+                Some(self.lexer.next_token())
+            }
+        } else {
+            Some(self.lexer.next_token())
+        }
+    }
 }
