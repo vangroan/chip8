@@ -4,6 +4,8 @@ use crate::constants::*;
 pub mod opcodes {
     /// Load (LD Vx, byte)
     pub const LD_VX_BYTE: u8 = 0x6;
+    /// ANNN (LD I, addr)
+    pub const LD_NNN_BYTE: u8 = 0xA;
 }
 
 /// Returns true if the program can fit in VM memory.
@@ -78,4 +80,11 @@ pub fn op_n(bytecode: &[u8], cursor: usize) -> u8 {
 pub fn encode_xnn(opcode: u8, vx: u8, nn: u8) -> [u8; 2] {
     println!("encode {:02X} {:02X} {:02X}", opcode, vx, nn);
     [(opcode << 4) | (vx & 0xF), nn]
+}
+
+pub fn encode_nnn(opcode: u8, nnn: u16) -> [u8; 2] {
+    println!("encode {:02X} 0x{:03X}", opcode, nnn);
+    let part1 = ((nnn & 0b1111_0000_0000) >> 8) as u8;
+    let part2 = (nnn & 0b1111_1111) as u8;
+    [(opcode << 4) | part1, part2]
 }

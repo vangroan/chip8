@@ -188,7 +188,8 @@ impl<'a> Lexer<'a> {
             self.cursor.next();
         }
 
-        while is_hex_letter(self.cursor.peek()) {
+        while is_hex_number(self.cursor.peek()) {
+            println!("is_hex_number: {:?}", self.cursor.peek());
             self.cursor.next();
         }
 
@@ -213,6 +214,10 @@ fn is_whitespace(c: char) -> bool {
 
 fn is_newline(c: char) -> bool {
     matches!(c, '\r' | '\n')
+}
+
+fn is_hex_number(c: char) -> bool {
+    is_digit(c) || is_hex_letter(c)
 }
 
 #[allow(clippy::manual_is_ascii_check)] // consistency with other functions

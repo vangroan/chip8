@@ -82,10 +82,32 @@ impl<'a> Assembler<'a> {
         ));
     }
 
+    fn resolve_label(&mut self, label: Token) -> Chip8Result<usize> {
+        let query = self.stream.span_fragment(&label.span);
+        self.labels
+            .iter()
+            .find(|(name, _)| name == query)
+            .map(|(_, offset)| offset)
+            .cloned()
+            .ok_or_else(|| self.error(label, "label is undefined"))
+    }
+
     fn emit(&mut self, instr: [u8; 2]) {
         println!("push: {:02X} {:02X}", instr[0], instr[1]);
         self.bytecode.push(instr[0]);
         self.bytecode.push(instr[1]);
+    }
+
+    fn dump_bytecode(&self) {
+        // Instructions are always 2 bytes.
+        assert!(self.bytecode.len() % 2 == 0);
+
+        for (i, instr) in self.bytecode.chunks(2).enumerate() {
+            let offset = i * 2;
+            let a = instr[0];
+            let b = instr[1];
+            println!("0x{offset:04X} {a:02X}{b:02X}");
+        }
     }
 }
 
@@ -117,6 +139,23 @@ impl<'a> Assembler<'a> {
             .map(|kind| format!("{:?}", kind))
             .collect::<Vec<_>>();
         panic!("expected one of: {}", kind_names.join(", "))
+    }
+
+    fn parse_args(&mut self) -> Chip8Result<[Token; 2]> {
+        let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let mut src = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+
+        // Labels start with a dot
+        if src.kind == TokenKind::Dot {
+            src = self.stream.consume(TokenKind::Ident)?;
+
+            // Transform the identifier into a label for ease of use.
+            // Technically the grammar is now no longer context-free.
+            src.kind = TokenKind::Label;
+        }
+
+        Ok([dst, src])
     }
 
     fn parse_number(&self, token: Token) -> Chip8Result<Number> {
@@ -183,39 +222,65 @@ impl<'a> Assembler<'a> {
 
     /// Load
     ///
-    /// - 6XNN (LD Vx, byte)
-    /// - ANNN (LD I, addr)
-    /// - Fx07 (LD Vx, DT)
-    /// - Fx0A (LD Vx, K)
-    /// - Fx15 (LD DT, Vx)
-    /// - Fx18 (LD ST, Vx)
-    /// - Fx29 (LD F, Vx)
-    /// - Fx33 (LD B, Vx)
+    /// - 6XNN (LD Vx,  byte)
+    /// - ANNN (LD I,   addr)
+    /// - Fx07 (LD Vx,  DT)
+    /// - Fx0A (LD Vx,  K)
+    /// - Fx15 (LD DT,  Vx)
+    /// - Fx18 (LD ST,  Vx)
+    /// - Fx29 (LD F,   Vx)
+    /// - Fx33 (LD B,   Vx)
     /// - Fx55 (LD [I], Vx)
-    /// - Fx65 (LD Vx, [I])
-    fn parse_load(&mut self, name: Token) -> Chip8Result<()> {
-        let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+    /// - Fx65 (LD Vx,  [I])
+    fn parse_load(&mut self, _name: Token) -> Chip8Result<()> {
+        use Keyword as KW;
+        use TokenKind as TK;
 
-        match dst.kind {
-            TokenKind::Keyword(kw) => match kw {
-                // 6XNN (LD Vx, byte)
-                //
-                // Load byte literal into Vx register
-                kw if is_vregister(kw) => {
-                    let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
-                    self.stream.consume(TokenKind::Comma)?;
-                    let literal = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
-                    let nn = self.parse_number(literal)?;
-                    self.emit(encode_xnn(LD_VX_BYTE, vx, nn.as_u8()))
-                }
-                _ => return Err(self.error(name, "todo")),
-            },
-            _ => return Err(self.error(name, "todo")),
+        // let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+        let [dst, src] = self.parse_args()?;
+
+        let signature = [dst.kind, src.kind];
+
+        match signature {
+            // (LD Vx, ____)
+            //
+            // Load byte literal into Vx register
+            [TK::Keyword(kw), TK::Number] if is_vregister(kw) => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                let nn = self.parse_number(src)?;
+                self.emit(encode_xnn(LD_VX_BYTE, vx, nn.as_u8()))
+            }
+            // ANNN (LD I, addr)
+            //
+            // Load memory address into index register.
+            [TK::Keyword(KW::Index), TK::Number] => {
+                let nnn = self.parse_number(src)?;
+                self.emit(encode_nnn(LD_NNN_BYTE, nnn.value));
+            }
+            // ANNN (LD I, label)
+            //
+            // Load memory address into index register.
+            [TK::Keyword(KW::Index), TK::Label] => {
+                let nnn = (self.resolve_label(src)? & 0xFFF) as u16;
+                self.emit(encode_nnn(LD_NNN_BYTE, nnn));
+            }
+            // Fx55 (LD [I], Vx)
+            //
+            // Load registers into memory block.
+            [TK::Keyword(KW::Index), TK::Keyword(kw)] if is_vregister(kw) => {}
+            _ => {
+                let message = format!(
+                    "unsupported arguments, found {:?}, {:?}",
+                    dst.kind, src.kind
+                );
+                return Err(self.error(dst, message));
+            }
         }
 
         let _newline = self.stream.consume(TokenKind::Newline);
 
-        println!("{:?}", self.bytecode);
+        // println!("{:?}", self.bytecode);
+        self.dump_bytecode();
 
         // Err(self.error(name, "todo"))
         Ok(())

@@ -29,6 +29,8 @@ pub enum TokenKind {
     String,
     /// Number literal
     Number,
+    /// Address offset label
+    Label,
 
     // ------------------------------------------------------------------------
     // Special
@@ -198,6 +200,7 @@ impl Keyword {
             "F"   => Some(Self::Char),
             "BCD" => Some(Self::Decimal),
             "DT"  => Some(Self::Delay),
+            "I"   => Some(Self::Index),
             "K"   => Some(Self::Key),
             "ST"  => Some(Self::Sound),
             // ----------------------------------------------------------------
