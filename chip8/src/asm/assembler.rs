@@ -269,14 +269,21 @@ impl<'a> Assembler<'a> {
 
         // Labels start with a dot
         if nnn.kind == TokenKind::Dot {
-            nnn = self.stream.consume(TokenKind::Ident)?;
+            let ident = self.stream.consume(TokenKind::Ident)?;
 
             // Transform the identifier into a label for ease of use.
             // Technically the grammar is now no longer context-free.
-            nnn.kind = TokenKind::Label;
+            nnn = Token {
+                kind: TokenKind::Label,
+                // FIXME: merging spans breaks label lookup later.
+                // span: nnn.span + ident.span,
+                span: ident.span,
+            };
         } else if nnn.kind != TokenKind::Number {
             // TODO: Should number be parsed here?
-            return Err(self.error(nnn, "expected number literal or label"));
+            let kind = nnn.kind;
+            let message = format!("expected number literal or label, but found {kind:?}");
+            return Err(self.error(nnn, message));
         }
 
         Ok([vx, nnn])
@@ -456,6 +463,16 @@ impl<'a> Assembler<'a> {
             //
             // Load registers into memory block.
             [TK::Keyword(KW::Index), TK::Keyword(kw)] if is_vregister(kw) => {}
+            [TK::Keyword(kw), _] if is_vregister(kw) => {
+                let kind = src.kind;
+                let message = format!("expected byte literal, but found {kind:?}");
+                return Err(self.error(src, message));
+            }
+            [TK::Keyword(_), _] => {
+                let kind = src.kind;
+                let message = format!("expected address, label or register, but found {kind:?}");
+                return Err(self.error(src, message));
+            }
             _ => {
                 let message = format!(
                     "unsupported arguments, found {:?}, {:?}",
