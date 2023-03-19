@@ -251,15 +251,15 @@ impl<'a> Assembler<'a> {
             }
         }
 
-        let kind_names = Self::STATEMENT_END
-            .iter()
-            .map(|kind| format!("{:?}", kind))
-            .collect::<Vec<_>>();
-        panic!(
-            "expected one of: {}; found {:?}",
-            kind_names.join(", "),
-            self.stream.peek_kind()
-        )
+        let token = self
+            .stream
+            .next_token()
+            .unwrap_or_else(|| unreachable!("end-of-file already checked"));
+        let message = format!(
+            "expected end-of-file or newline, but found {:?}",
+            token.kind
+        );
+        Err(self.error(token, message))
     }
 
     fn parse_xnnn(&mut self) -> Chip8Result<[Token; 2]> {
