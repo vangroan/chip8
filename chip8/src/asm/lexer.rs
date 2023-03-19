@@ -189,7 +189,6 @@ impl<'a> Lexer<'a> {
         }
 
         while is_hex_number(self.cursor.peek()) {
-            println!("is_hex_number: {:?}", self.cursor.peek());
             self.cursor.next();
         }
 

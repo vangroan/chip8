@@ -193,7 +193,7 @@ impl Keyword {
             "sub"  | "SUB"  => Some(Self::Sub),
             "subn" | "SUBN" => Some(Self::SubN),
             "sys"  | "SYS"  => Some(Self::System),
-            "rnd"  | "RAND" => Some(Self::Random),
+            "rand" | "RAND" => Some(Self::Random),
             "ret"  | "RET"  => Some(Self::Return),
             "xor"  | "XOR"  => Some(Self::Xor),
             // ----------------------------------------------------------------

@@ -3,6 +3,7 @@ use std::{env, error::Error, fs, time::Instant};
 
 use chip8::{
     asm::{Assembler, Lexer, TokenKind},
+    constants::*,
     prelude::*,
 };
 
@@ -43,21 +44,22 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
 
     let mut lexer = Lexer::new(source_code.as_str());
 
+    println!("offset | len | token       | fragment ");
     loop {
         let token = lexer.next_token();
 
         match token.kind {
             TK::EOF | TK::Newline => println!(
-                "{:6}:{} {:?}",
+                "{0:7}:{1: <3} {2: <16?}",
                 token.span.index, token.span.size, token.kind
             ),
-            _ => println!(
-                "{:6}:{} {:?} \"{}\"",
-                token.span.index,
-                token.span.size,
-                token.kind,
-                token.span.fragment(lexer.source_code())
-            ),
+            _ => {
+                let offset = token.span.index;
+                let len = token.span.size;
+                let kind = format!("{:?}", token.kind); // cannot format debug print {:?} into columns
+                let fragment = token.span.fragment(lexer.source_code());
+                println!("{offset:7}:{len: <3} {kind: <20} \"{fragment}\"")
+            }
         }
 
         if matches!(token.kind, TokenKind::EOF) {
@@ -70,12 +72,24 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
         let asm = Assembler::new(lexer);
 
         match asm.parse() {
-            Ok(bytecode) => println!("{bytecode:?}"),
+            Ok(bytecode) => dump_bytecode(&bytecode),
             Err(err) => eprintln!("{}", err),
         }
     }
 
     Ok(())
+}
+
+fn dump_bytecode(bytecode: &[u8]) {
+    // Instructions are always 2 bytes.
+    assert!(bytecode.len() % 2 == 0);
+
+    for (i, instr) in bytecode.chunks(2).enumerate() {
+        let offset = MEM_START + i * 2;
+        let a = instr[0];
+        let b = instr[1];
+        println!("0x{offset:04X} {a:02X}{b:02X}");
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
