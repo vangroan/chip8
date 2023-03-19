@@ -279,6 +279,16 @@ impl<'a> Assembler<'a> {
         Ok([dst, src])
     }
 
+    fn parse_vregister(&self, token: Token) -> Chip8Result<u8> {
+        if let TokenKind::Keyword(keyword) = token.kind {
+            if let Some(vregister) = keyword.as_vregister() {
+                return Ok(vregister);
+            }
+        }
+        let message = format!("expected one of the V0-VF registers");
+        Err(self.error(token, message))
+    }
+
     fn parse_number(&self, token: Token) -> Chip8Result<Number> {
         use NumFormat as NF;
 
@@ -360,6 +370,7 @@ impl<'a> Assembler<'a> {
         if let TokenKind::Keyword(keyword) = name.kind {
             match keyword {
                 Keyword::Load => self.parse_load(name)?,
+                Keyword::Random => self.parse_rand(name)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -434,6 +445,23 @@ impl<'a> Assembler<'a> {
         self.dump_bytecode();
 
         // Err(self.error(name, "todo"))
+        Ok(())
+    }
+
+    fn parse_rand(&mut self, _name: Token) -> Chip8Result<()> {
+        let vx = self
+            .stream
+            .next_token()
+            .ok_or_else(|| Chip8Error::EOF)
+            .and_then(|t| self.parse_vregister(t))?;
+        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let nn = self
+            .stream
+            .consume(TokenKind::Number)
+            .and_then(|t| self.parse_number(t))?;
+
+        self.emit2(encode_xnn(RND_X_BYTE, vx, nn.as_u8()));
+
         Ok(())
     }
 }

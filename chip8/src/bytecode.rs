@@ -6,6 +6,8 @@ pub mod opcodes {
     pub const LD_VX_BYTE: u8 = 0x6;
     /// ANNN (LD I, addr)
     pub const LD_NNN_BYTE: u8 = 0xA;
+    /// CXNN (RND Vx, byte)
+    pub const RND_X_BYTE: u8 = 0xC;
 }
 
 /// Returns true if the program can fit in VM memory.
