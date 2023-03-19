@@ -262,21 +262,39 @@ impl<'a> Assembler<'a> {
         )
     }
 
-    fn parse_args(&mut self) -> Chip8Result<[Token; 2]> {
-        let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+    fn parse_xnnn(&mut self) -> Chip8Result<[Token; 2]> {
+        let vx = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
         let _comma = self.stream.consume(TokenKind::Comma)?;
-        let mut src = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+        let mut nnn = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
 
         // Labels start with a dot
-        if src.kind == TokenKind::Dot {
-            src = self.stream.consume(TokenKind::Ident)?;
+        if nnn.kind == TokenKind::Dot {
+            nnn = self.stream.consume(TokenKind::Ident)?;
 
             // Transform the identifier into a label for ease of use.
             // Technically the grammar is now no longer context-free.
-            src.kind = TokenKind::Label;
+            nnn.kind = TokenKind::Label;
+        } else if nnn.kind != TokenKind::Number {
+            // TODO: Should number be parsed here?
+            return Err(self.error(nnn, "expected number literal or label"));
         }
 
-        Ok([dst, src])
+        Ok([vx, nnn])
+    }
+
+    fn parse_xnn(&mut self) -> Chip8Result<(u8, Number)> {
+        let vx = self
+            .stream
+            .next_token()
+            .ok_or_else(|| Chip8Error::EOF)
+            .and_then(|t| self.parse_vregister(t))?;
+        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let nn = self
+            .stream
+            .consume(TokenKind::Number)
+            .and_then(|t| self.parse_number(t))?;
+
+        Ok((vx, nn))
     }
 
     fn parse_vregister(&self, token: Token) -> Chip8Result<u8> {
@@ -371,6 +389,7 @@ impl<'a> Assembler<'a> {
             match keyword {
                 Keyword::Load => self.parse_load(name)?,
                 Keyword::Random => self.parse_rand(name)?,
+                Keyword::SkipEq => self.parse_skip(name)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -378,6 +397,13 @@ impl<'a> Assembler<'a> {
             }
         }
 
+        Ok(())
+    }
+
+    fn parse_skip(&mut self, _name: Token) -> Chip8Result<()> {
+        let (vx, nn) = self.parse_xnn()?;
+        self.consume_eos()?;
+        self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
         Ok(())
     }
 
@@ -398,7 +424,7 @@ impl<'a> Assembler<'a> {
         use TokenKind as TK;
 
         // let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
-        let [dst, src] = self.parse_args()?;
+        let [dst, src] = self.parse_xnnn()?;
 
         let signature = [dst.kind, src.kind];
 
@@ -409,14 +435,14 @@ impl<'a> Assembler<'a> {
             [TK::Keyword(kw), TK::Number] if is_vregister(kw) => {
                 let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
                 let nn = self.parse_number(src)?;
-                self.emit2(encode_xnn(LD_VX_BYTE, vx, nn.as_u8()))
+                self.emit2(encode_xnn(LD_VX_NN, vx, nn.as_u8()))
             }
             // ANNN (LD I, addr)
             //
             // Load memory address into index register.
             [TK::Keyword(KW::Index), TK::Number] => {
                 let nnn = self.parse_number(src)?;
-                self.emit2(encode_nnn(LD_NNN_BYTE, nnn.value));
+                self.emit2(encode_nnn(LD_NNN_NN, nnn.value));
             }
             // ANNN (LD I, label)
             //
@@ -424,7 +450,7 @@ impl<'a> Assembler<'a> {
             [TK::Keyword(KW::Index), TK::Label] => {
                 // NOTE: If label is not defined yet, we default to 0x000
                 let nnn = (self.resolve_label(src).unwrap_or_default() & 0xFFF) as u16;
-                self.emit2(encode_nnn(LD_NNN_BYTE, nnn));
+                self.emit2(encode_nnn(LD_NNN_NN, nnn));
             }
             // Fx55 (LD [I], Vx)
             //
@@ -441,27 +467,15 @@ impl<'a> Assembler<'a> {
 
         self.consume_eos()?;
 
-        // println!("{:?}", self.bytecode);
         self.dump_bytecode();
 
-        // Err(self.error(name, "todo"))
         Ok(())
     }
 
     fn parse_rand(&mut self, _name: Token) -> Chip8Result<()> {
-        let vx = self
-            .stream
-            .next_token()
-            .ok_or_else(|| Chip8Error::EOF)
-            .and_then(|t| self.parse_vregister(t))?;
-        let _comma = self.stream.consume(TokenKind::Comma)?;
-        let nn = self
-            .stream
-            .consume(TokenKind::Number)
-            .and_then(|t| self.parse_number(t))?;
-
-        self.emit2(encode_xnn(RND_X_BYTE, vx, nn.as_u8()));
-
+        let (vx, nn) = self.parse_xnn()?;
+        self.consume_eos()?;
+        self.emit2(encode_xnn(RND_X_NN, vx, nn.as_u8()));
         Ok(())
     }
 }

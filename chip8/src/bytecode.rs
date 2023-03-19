@@ -1,13 +1,16 @@
 /// Helpers for extracting data from opcodes.
 use crate::constants::*;
 
+#[rustfmt::skip]
 pub mod opcodes {
+    /// 3XNN (SE Vx, byte)
+    pub const SE_VX_NN:  u8 = 0x3;
     /// Load (LD Vx, byte)
-    pub const LD_VX_BYTE: u8 = 0x6;
+    pub const LD_VX_NN:  u8 = 0x6;
     /// ANNN (LD I, addr)
-    pub const LD_NNN_BYTE: u8 = 0xA;
+    pub const LD_NNN_NN: u8 = 0xA;
     /// CXNN (RND Vx, byte)
-    pub const RND_X_BYTE: u8 = 0xC;
+    pub const RND_X_NN:  u8 = 0xC;
 }
 
 /// Returns true if the program can fit in VM memory.

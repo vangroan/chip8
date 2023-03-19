@@ -1,5 +1,5 @@
 //! Entrypoint for CLI
-use std::{env, error::Error, fs, time::Instant};
+use std::{env, error::Error, fs, io::Write, time::Instant};
 
 use chip8::{
     asm::{Assembler, Lexer, TokenKind},
@@ -72,7 +72,11 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
         let asm = Assembler::new(lexer);
 
         match asm.parse() {
-            Ok(bytecode) => dump_bytecode(&bytecode),
+            Ok(bytecode) => {
+                let mut outfile = fs::File::create("output.rom")?;
+                outfile.write(&bytecode)?;
+                dump_bytecode(&bytecode)
+            }
             Err(err) => eprintln!("{}", err),
         }
     }
