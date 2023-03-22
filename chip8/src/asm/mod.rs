@@ -5,11 +5,12 @@ mod lexer;
 mod token_stream;
 mod tokens;
 
-pub fn assemble(source_code: impl AsRef<str>) -> Vec<u8> {
+use crate::error::Chip8Result;
+
+pub fn assemble(source_code: impl AsRef<str>) -> Chip8Result<Vec<u8>> {
     let lexer = Lexer::new(source_code.as_ref());
     let asm = Assembler::new(lexer);
-
-    todo!()
+    asm.parse()
 }
 
 pub use self::{

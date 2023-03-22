@@ -7,7 +7,7 @@ mod disasm;
 mod error;
 mod vm;
 
-pub use self::vm::Hz;
+pub use self::{asm::assemble, vm::Hz};
 
 pub mod prelude {
     pub use super::{

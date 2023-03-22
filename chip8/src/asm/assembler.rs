@@ -9,7 +9,7 @@ use crate::{
 use super::{
     lexer::Lexer,
     token_stream::TokenStream,
-    tokens::{NumFormat, Number, TokenKind},
+    tokens::{Addr, NumFormat, Number, TokenKind},
     Keyword, Token,
 };
 
@@ -262,7 +262,37 @@ impl<'a> Assembler<'a> {
         Err(self.error(token, message))
     }
 
-    fn parse_xnnn(&mut self) -> Chip8Result<[Token; 2]> {
+    fn parse_nnn(&mut self) -> Chip8Result<Addr> {
+        let token = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+
+        match token.kind {
+            TokenKind::Number => {
+                let number = self.parse_number(token)?;
+
+                Ok(Addr::Num(number))
+            }
+            TokenKind::Dot => {
+                let ident = self.stream.consume(TokenKind::Ident)?;
+
+                // Transform the identifier into a label for ease of use.
+                // Technically the grammar is now no longer context-free.
+                let label = Token {
+                    kind: TokenKind::Label,
+                    // FIXME: merging spans breaks label lookup later.
+                    // span: nnn.span + ident.span,
+                    span: ident.span,
+                };
+
+                Ok(Addr::Label(label))
+            }
+            _ => Err(self.error(
+                token,
+                "expected number literal or label, but found {kind:?}",
+            )),
+        }
+    }
+
+    fn parse_arg2(&mut self) -> Chip8Result<[Token; 2]> {
         let vx = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
         let _comma = self.stream.consume(TokenKind::Comma)?;
         let mut nnn = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
@@ -304,6 +334,27 @@ impl<'a> Assembler<'a> {
         Ok((vx, nn))
     }
 
+    fn parse_xyn(&mut self) -> Chip8Result<(u8, u8, Number)> {
+        let vx = self
+            .stream
+            .next_token()
+            .ok_or_else(|| Chip8Error::EOF)
+            .and_then(|t| self.parse_vregister(t))?;
+        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let vy = self
+            .stream
+            .next_token()
+            .ok_or_else(|| Chip8Error::EOF)
+            .and_then(|t| self.parse_vregister(t))?;
+        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let n = self
+            .stream
+            .consume(TokenKind::Number)
+            .and_then(|t| self.parse_number(t))?;
+
+        Ok((vx, vy, n))
+    }
+
     fn parse_vregister(&self, token: Token) -> Chip8Result<u8> {
         if let TokenKind::Keyword(keyword) = token.kind {
             if let Some(vregister) = keyword.as_vregister() {
@@ -316,6 +367,8 @@ impl<'a> Assembler<'a> {
 
     fn parse_number(&self, token: Token) -> Chip8Result<Number> {
         use NumFormat as NF;
+
+        debug_assert_eq!(token.kind, TokenKind::Number);
 
         let fragment = self.stream.span_fragment(&token.span);
         println!("fragment {fragment}");
@@ -336,7 +389,11 @@ impl<'a> Assembler<'a> {
 
         let value = parse_result.map_err(|err| Chip8Error::NumberParse(err))?;
 
-        Ok(Number { value, format })
+        Ok(Number {
+            token,
+            value,
+            format,
+        })
     }
 
     fn parse_label(&mut self) -> Chip8Result<()> {
@@ -394,9 +451,12 @@ impl<'a> Assembler<'a> {
 
         if let TokenKind::Keyword(keyword) = name.kind {
             match keyword {
+                Keyword::Jump => self.parse_jump(name)?,
                 Keyword::Load => self.parse_load(name)?,
-                Keyword::Random => self.parse_rand(name)?,
-                Keyword::SkipEq => self.parse_skip(name)?,
+                Keyword::Add => self.parse_add(name)?,
+                Keyword::Random => self.parse_random(name)?,
+                Keyword::Draw => self.parse_draw(name)?,
+                Keyword::SkipEq => self.parse_skip_eq(name)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -407,7 +467,31 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    fn parse_skip(&mut self, _name: Token) -> Chip8Result<()> {
+    fn parse_jump(&mut self, _name: Token) -> Chip8Result<()> {
+        let nnn = self.parse_nnn()?;
+
+        match nnn {
+            Addr::Num(number) => {
+                if number.value > 0xFFF {
+                    return Err(self.error(
+                        number.token.clone(),
+                        "argument for jump address must be 12-bits",
+                    ));
+                }
+                self.emit2(encode_nnn(JP_ADDR, number.value));
+            }
+            Addr::Label(label) => {
+                // NOTE: If label is not defined yet,address 0x000 is inserted as a placeholder.
+                //       Error handling is in the fix_labels pass.
+                let number = self.resolve_label(label).unwrap_or_default() & 0xFFF;
+                self.emit2(encode_nnn(JP_ADDR, number));
+            }
+        }
+        Ok(())
+    }
+
+    /// 3XNN (SE Vx, byte)
+    fn parse_skip_eq(&mut self, _name: Token) -> Chip8Result<()> {
         let (vx, nn) = self.parse_xnn()?;
         self.consume_eos()?;
         self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
@@ -431,15 +515,15 @@ impl<'a> Assembler<'a> {
         use TokenKind as TK;
 
         // let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
-        let [dst, src] = self.parse_xnnn()?;
+        let [dst, src] = self.parse_arg2()?;
 
         let signature = [dst.kind, src.kind];
 
         match signature {
-            // (LD Vx, byte)
+            // 6XNN (LD Vx, byte)
             //
             // Load byte literal into Vx register
-            [TK::Keyword(kw), TK::Number] if is_vregister(kw) => {
+            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
                 let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
                 let nn = self.parse_number(src)?;
                 self.emit2(encode_xnn(LD_VX_NN, vx, nn.as_u8()))
@@ -449,7 +533,7 @@ impl<'a> Assembler<'a> {
             // Load memory address into index register.
             [TK::Keyword(KW::Index), TK::Number] => {
                 let nnn = self.parse_number(src)?;
-                self.emit2(encode_nnn(LD_NNN_NN, nnn.value));
+                self.emit2(encode_nnn(LD_I_NNN, nnn.value));
             }
             // ANNN (LD I, label)
             //
@@ -457,13 +541,21 @@ impl<'a> Assembler<'a> {
             [TK::Keyword(KW::Index), TK::Label] => {
                 // NOTE: If label is not defined yet, we default to 0x000
                 let nnn = (self.resolve_label(src).unwrap_or_default() & 0xFFF) as u16;
-                self.emit2(encode_nnn(LD_NNN_NN, nnn));
+                self.emit2(encode_nnn(LD_I_NNN, nnn));
+            }
+            // Fx07 (LD Vx,  DT)
+            //
+            // Load delay timer into Vx register
+            [TK::Keyword(kw), TK::Keyword(KW::Delay)] if kw.is_vregister() => {
+                return Err(self.error(src, "not implemented yet"));
             }
             // Fx55 (LD [I], Vx)
             //
             // Load registers into memory block.
-            [TK::Keyword(KW::Index), TK::Keyword(kw)] if is_vregister(kw) => {}
-            [TK::Keyword(kw), _] if is_vregister(kw) => {
+            [TK::Keyword(KW::Index), TK::Keyword(kw)] if kw.is_vregister() => {
+                return Err(self.error(dst, "not implemented yet"));
+            }
+            [TK::Keyword(kw), _] if kw.is_vregister() => {
                 let kind = src.kind;
                 let message = format!("expected byte literal, but found {kind:?}");
                 return Err(self.error(src, message));
@@ -489,35 +581,29 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    fn parse_rand(&mut self, _name: Token) -> Chip8Result<()> {
+    fn parse_add(&mut self, _name: Token) -> Chip8Result<()> {
+        let (vx, nn) = self.parse_xnn()?;
+        self.consume_eos()?;
+        self.emit2(encode_xnn(ADD_VX_NN, vx, nn.as_u8()));
+        Ok(())
+    }
+
+    fn parse_random(&mut self, _name: Token) -> Chip8Result<()> {
         let (vx, nn) = self.parse_xnn()?;
         self.consume_eos()?;
         self.emit2(encode_xnn(RND_X_NN, vx, nn.as_u8()));
         Ok(())
     }
-}
 
-fn is_vregister(keyword: Keyword) -> bool {
-    use Keyword as K;
-    matches!(
-        keyword,
-        K::V0
-            | K::V1
-            | K::V2
-            | K::V3
-            | K::V4
-            | K::V5
-            | K::V6
-            | K::V7
-            | K::V8
-            | K::V9
-            | K::VA
-            | K::VB
-            | K::VC
-            | K::VD
-            | K::VE
-            | K::VF
-    )
+    fn parse_draw(&mut self, _name: Token) -> Chip8Result<()> {
+        let (vx, vy, n) = self.parse_xyn()?;
+        if n.value > 0xF {
+            return Err(self.error(n.token, "argument for rows must be 4-bits"));
+        }
+        self.consume_eos()?;
+        self.emit2(encode_xyn(DRW_X_Y_N, vx, vy, n.as_u8()));
+        Ok(())
+    }
 }
 
 fn slice_number(fragment: &str) -> &str {

@@ -2,7 +2,7 @@
 
 use std::ops;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub span: Span,
     pub kind: TokenKind,
@@ -40,7 +40,7 @@ pub enum TokenKind {
     EOF,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Span {
     pub index: u32,
     pub size: u32,
@@ -247,10 +247,35 @@ impl Keyword {
             _ => None,
         }
     }
+
+    /// Checks whether the keyword is register.
+    pub fn is_vregister(&self) -> bool {
+        use Keyword as K;
+        matches!(
+            self,
+            K::V0
+                | K::V1
+                | K::V2
+                | K::V3
+                | K::V4
+                | K::V5
+                | K::V6
+                | K::V7
+                | K::V8
+                | K::V9
+                | K::VA
+                | K::VB
+                | K::VC
+                | K::VD
+                | K::VE
+                | K::VF
+        )
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Number {
+    pub token: Token,
     pub value: u16,
     pub format: NumFormat,
 }
@@ -266,6 +291,23 @@ pub enum NumFormat {
 impl Number {
     pub fn as_u8(&self) -> u8 {
         self.value as u8
+    }
+}
+
+#[derive(Debug)]
+pub enum Addr {
+    /// 12-bit number literal.
+    Num(Number),
+    /// Line label.
+    Label(Token),
+}
+
+impl Addr {
+    pub fn token(&self) -> &Token {
+        match self {
+            Self::Num(number) => &number.token,
+            Self::Label(label) => &label,
+        }
     }
 }
 

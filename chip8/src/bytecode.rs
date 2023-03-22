@@ -3,14 +3,20 @@ use crate::constants::*;
 
 #[rustfmt::skip]
 pub mod opcodes {
+    /// 1NNN (JP addr)
+    pub const JP_ADDR: u8   = 0x1;
     /// 3XNN (SE Vx, byte)
-    pub const SE_VX_NN:  u8 = 0x3;
+    pub const SE_VX_NN: u8  = 0x3;
     /// Load (LD Vx, byte)
-    pub const LD_VX_NN:  u8 = 0x6;
+    pub const LD_VX_NN: u8  = 0x6;
+    /// 7XNN (ADD Vx, byte)
+    pub const ADD_VX_NN: u8 = 0x7;
     /// ANNN (LD I, addr)
-    pub const LD_NNN_NN: u8 = 0xA;
+    pub const LD_I_NNN: u8 = 0xA;
     /// CXNN (RND Vx, byte)
-    pub const RND_X_NN:  u8 = 0xC;
+    pub const RND_X_NN: u8  = 0xC;
+    /// DXYN (DRW Vx, Vy, byte)
+    pub const DRW_X_Y_N: u8 = 0xD;
 }
 
 /// Returns true if the program can fit in VM memory.
@@ -83,8 +89,13 @@ pub fn op_n(bytecode: &[u8], cursor: usize) -> u8 {
 }
 
 pub fn encode_xnn(opcode: u8, vx: u8, nn: u8) -> [u8; 2] {
-    println!("encode {:02X} {:02X} {:02X}", opcode, vx, nn);
+    println!("encode {:02X} {:02X}, {:02X}", opcode, vx, nn);
     [(opcode << 4) | (vx & 0xF), nn]
+}
+
+pub fn encode_xyn(opcode: u8, vx: u8, vy: u8, n: u8) -> [u8; 2] {
+    println!("encode {:02X} {:02X}, {:02X}, {:02X}", opcode, vx, vy, n);
+    [(opcode << 4) | (vx & 0xF), (vy << 4) | (n & 0xF)]
 }
 
 pub fn encode_nnn(opcode: u8, nnn: u16) -> [u8; 2] {
