@@ -23,8 +23,6 @@
     SE      v1,  32      ; if y == 32 (bottom of display)
     JP      .loop        ; else: again
 
-    DRW     v0, v1, 100
-
 .forever
     JP      .forever     ; then: forever
 

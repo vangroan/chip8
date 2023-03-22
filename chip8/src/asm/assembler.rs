@@ -414,7 +414,10 @@ impl<'a> Assembler<'a> {
 
     /// Emit raw data into bytecode.
     fn parse_data_block(&mut self) -> Chip8Result<()> {
+        debug_assert!(self.bytecode.len() % 2 == 0);
+
         let mut count = 0;
+        let mut last_token: Option<Token> = None;
 
         loop {
             match self.stream.peek_kind() {
@@ -425,6 +428,7 @@ impl<'a> Assembler<'a> {
                         panic!("only 8-bit literals are currently supported");
                     }
                     self.emit(nn.value as u8);
+                    last_token = Some(nn.token);
                     count += 1;
                 }
                 _ => break,
@@ -435,8 +439,16 @@ impl<'a> Assembler<'a> {
             let _newline = self.stream.consume(TokenKind::Newline);
         }
 
-        println!("data count: {count}");
-        assert!(count % 2 == 0, "data must be added in 2 bytes");
+        log::trace!("data count: {count}");
+
+        // Stride of bytecode must be 2 for program counter to increment correctly.
+        if let Some(token) = last_token {
+            if count % 2 != 0 {
+                // Place the error message at the last data literal.
+                // FIXME: Error format that will show preceding lines.
+                return Err(self.error(token, "data must be added in 2 byte pairs"));
+            }
+        }
 
         Ok(())
     }
