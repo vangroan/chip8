@@ -6,7 +6,7 @@ use std::{
     string::FromUtf8Error,
 };
 
-use crate::asm::{Span, Token, TokenKind};
+use crate::asm::{Span, TokenKind};
 
 pub type Chip8Result<T> = std::result::Result<T, Chip8Error>;
 
@@ -23,6 +23,7 @@ pub enum Chip8Error {
     Fmt(fmt::Error),
     Io(io::Error),
     Utf8(FromUtf8Error),
+    Multi(Vec<Chip8Error>),
 }
 
 impl Display for Chip8Error {
@@ -37,6 +38,17 @@ impl Display for Chip8Error {
             Self::Fmt(err) => write!(f, "{}", err),
             Self::Io(err) => write!(f, "{}", err),
             Self::Utf8(err) => write!(f, "{}", err),
+            Self::Multi(errors) => {
+                // Print all errors separated with a newline
+                let count = errors.len();
+                for (index, err) in errors.iter().enumerate() {
+                    write!(f, "{}", err)?;
+                    if index < count {
+                        write!(f, "\n")?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -63,7 +75,7 @@ impl From<FromUtf8Error> for Chip8Error {
 
 #[derive(Debug)]
 pub struct AsmError {
-    pub token: Token,
+    pub span: Span,
     pub line: String,
     pub line_span: Span,
     pub line_no: usize,
@@ -74,12 +86,14 @@ impl AsmError {
     const MARKER: u8 = 0x5E; // caret (^)
     const SPACE: u8 = 0x20; // space ( )
 
-    pub fn new(source_code: impl AsRef<str>, token: Token, message: impl ToString) -> Self {
-        let (line, line_span) = token.span.surrounding_line(source_code.as_ref());
-        let line_no = Self::count_lines(source_code.as_ref(), token.span.index as usize);
+    pub fn new(source_code: impl AsRef<str>, span: Span, message: impl ToString) -> Self {
+        let (line, line_span) = span.surrounding_line(source_code.as_ref());
+
+        // Line numbers start at 1
+        let line_no = 1 + Self::count_lines(source_code.as_ref(), span.index as usize);
 
         Self {
-            token,
+            span,
             line: line.to_string(),
             line_span,
             line_no,
@@ -117,12 +131,14 @@ impl Display for AsmError {
         //               ^ padding
 
         const PADDING: usize = 1;
-        let relative_index = (self.token.span.index - self.line_span.index) as usize;
+        let relative_index = (self.span.index - self.line_span.index) as usize;
         // println!("relative index: {}", relative_index);
         let indent =
             String::from_utf8(vec![Self::SPACE; PADDING + relative_index]).unwrap_or_default();
-        let marker = String::from_utf8(vec![Self::MARKER; self.token.span.size as usize])
-            .unwrap_or_default();
+
+        // EOF span has size 0, so we clamp to 1 for a minimal marker to show up.
+        let marker_width = usize::max(1, self.span.size as usize);
+        let marker = String::from_utf8(vec![Self::MARKER; marker_width]).unwrap_or_default();
         writeln!(f, "{} |{}{}", margin, indent, marker)?;
         writeln!(f, "{} |", margin)?;
 

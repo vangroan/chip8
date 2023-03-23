@@ -79,7 +79,9 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
                 dump_bytecode(&bytecode)
             }
             Err(err) => {
-                error!("{err}");
+                error!("assembly error\n{err}");
+                // Exit process with error
+                return Err(err);
             }
         }
     }

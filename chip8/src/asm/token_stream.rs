@@ -20,6 +20,10 @@ pub struct TokenStream<'a> {
     /// Keep reference to the source so the parser can
     /// slice fragments from it.
     original: &'a str,
+    /// A copy of the previous token.
+    /// This can be used to build errors that refer
+    /// to the end of the previous token's span.
+    prev: Option<Token>,
 }
 
 impl<'a> TokenStream<'a> {
@@ -27,11 +31,16 @@ impl<'a> TokenStream<'a> {
         Self {
             original: lexer.source_code(),
             lexer: lexer.into_iter().peekable(),
+            prev: None,
         }
     }
 
     pub fn source_code(&self) -> &str {
         self.original
+    }
+
+    pub fn previous_token(&self) -> Option<&Token> {
+        self.prev.as_ref()
     }
 
     /// Slice a fragment of source code.
@@ -56,8 +65,10 @@ impl<'a> TokenStream<'a> {
     /// Consumes the current token regardless of type.
     ///
     /// Returns `None` when the cursor is at the end of the token stream.
+    #[inline]
     pub fn next_token(&mut self) -> Option<Token> {
-        self.lexer.next()
+        self.prev = self.lexer.next();
+        self.prev.clone()
     }
 
     /// Consumes the current token if it matches the given token kind.
@@ -74,7 +85,7 @@ impl<'a> TokenStream<'a> {
             Some(token) => {
                 let is_match = token.kind == token_kind;
                 if is_match {
-                    self.lexer.next(); // discard
+                    let _ = self.next_token(); // discard
                 }
                 // peek is reset by next()
                 is_match
@@ -112,7 +123,7 @@ impl<'a> TokenStream<'a> {
                         encountered: token.kind,
                     }))
                 } else {
-                    self.lexer.next().ok_or_else(|| {
+                    self.next_token().ok_or_else(|| {
                         // TODO: Change from panic to error
                         panic!("unexpected end-of-file");
                     })
@@ -132,7 +143,7 @@ impl<'a> TokenStream<'a> {
                     if &token.kind != token_kind {
                         continue;
                     } else {
-                        return self.lexer.next().ok_or_else(|| {
+                        return self.next_token().ok_or_else(|| {
                             // TODO: Change from panic to error
                             panic!("unexpected end-of-file");
                         });
@@ -157,7 +168,7 @@ impl<'a> TokenStream<'a> {
         // self.lexer.reset_peek();
         if let Some(token) = self.lexer.peek() {
             if token.kind == kind {
-                self.lexer.next();
+                self.next_token();
             } else {
                 // self.lexer.reset_peek();
             }
@@ -169,7 +180,7 @@ impl<'a> TokenStream<'a> {
         // self.lexer.reset_peek();
         while let Some(token) = self.lexer.peek() {
             if predicate(token.kind) {
-                self.lexer.next();
+                self.next_token();
             } else {
                 // self.lexer.reset_peek();
                 return;

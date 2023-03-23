@@ -84,7 +84,10 @@ impl Span {
                         start = *i;
                     }
                 }
-            } else if i >= self.end() as usize {
+            } else if i >= self.index as usize {
+                // End the line when we encounter a newline after the start of the token.
+                // Newline tokens (and on Windows the carriage return character)
+                // will now be included in the line span.
                 if c == NEWLINE {
                     end = i + 1;
 
