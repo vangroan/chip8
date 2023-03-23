@@ -6,6 +6,7 @@ use chip8::{
     constants::*,
     prelude::*,
 };
+use log::{error, info};
 
 fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
     println!("Running Bytecode Interpreter");
@@ -37,7 +38,7 @@ fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
 fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
     use TokenKind as TK;
 
-    println!("Running Assembler");
+    info!("running Assembler");
 
     let file_bytes = fs::read(filepath.as_ref())?;
     let source_code = String::from_utf8(file_bytes)?;
@@ -77,7 +78,9 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
                 outfile.write(&bytecode)?;
                 dump_bytecode(&bytecode)
             }
-            Err(err) => eprintln!("{}", err),
+            Err(err) => {
+                error!("{err}");
+            }
         }
     }
 
@@ -97,6 +100,8 @@ fn dump_bytecode(bytecode: &[u8]) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    simple_logger::SimpleLogger::new().env().init().unwrap();
+
     match parse_args() {
         Some(Cmd::Run { filepath }) => run_bytecode(filepath)?,
         Some(Cmd::Asm { filepath }) => run_assembler(filepath)?,

@@ -1,0 +1,15 @@
+[package]
+name = "chip8-cli"
+version = "0.3.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "chip8"
+path = "src/main.rs"
+
+[dependencies]
+chip8 = { path = "../chip8" }
+log = "0.4"
+simple_logger = { version = "4.1" }

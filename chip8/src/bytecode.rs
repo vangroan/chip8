@@ -1,3 +1,5 @@
+use log::trace;
+
 /// Helpers for extracting data from opcodes.
 use crate::constants::*;
 
@@ -89,17 +91,17 @@ pub fn op_n(bytecode: &[u8], cursor: usize) -> u8 {
 }
 
 pub fn encode_xnn(opcode: u8, vx: u8, nn: u8) -> [u8; 2] {
-    println!("encode {:02X} {:02X}, {:02X}", opcode, vx, nn);
+    trace!("encode {:02X} {:02X}, {:02X}", opcode, vx, nn);
     [(opcode << 4) | (vx & 0xF), nn]
 }
 
 pub fn encode_xyn(opcode: u8, vx: u8, vy: u8, n: u8) -> [u8; 2] {
-    println!("encode {:02X} {:02X}, {:02X}, {:02X}", opcode, vx, vy, n);
+    trace!("encode {:02X} {:02X}, {:02X}, {:02X}", opcode, vx, vy, n);
     [(opcode << 4) | (vx & 0xF), (vy << 4) | (n & 0xF)]
 }
 
 pub fn encode_nnn(opcode: u8, nnn: u16) -> [u8; 2] {
-    println!("encode {:02X} 0x{:03X}", opcode, nnn);
+    trace!("encode {:02X} 0x{:03X}", opcode, nnn);
     let part1 = ((nnn & 0b1111_0000_0000) >> 8) as u8;
     let part2 = (nnn & 0b1111_1111) as u8;
     [(opcode << 4) | part1, part2]

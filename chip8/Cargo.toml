@@ -1,17 +1,12 @@
 [package]
 name = "chip8"
 version = "0.3.0"
-authors = ["Willem Victor <wimpievictor@gmail.com>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "chip8"
-path = "src/bin/cli.rs"
-
 [dependencies]
-log = "0.4"
+log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rand = "0.8"
 
 [dev-dependencies]
