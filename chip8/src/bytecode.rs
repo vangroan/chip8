@@ -5,20 +5,28 @@ use crate::constants::*;
 
 #[rustfmt::skip]
 pub mod opcodes {
+    /// 00E0 (CLS)
+    pub const CLS: u8        = 0xE0;
+    /// 00EE (RET)
+    pub const RET: u8        = 0xEE;
     /// 1NNN (JP addr)
-    pub const JP_ADDR: u8   = 0x1;
+    pub const JP_ADDR: u8    = 0x1;
+    /// 2NNN (CALL addr)
+    pub const CALL_ADDR: u8  = 0x2;
     /// 3XNN (SE Vx, byte)
-    pub const SE_VX_NN: u8  = 0x3;
+    pub const SE_VX_NN: u8   = 0x3;
     /// Load (LD Vx, byte)
-    pub const LD_VX_NN: u8  = 0x6;
+    pub const LD_VX_NN: u8   = 0x6;
     /// 7XNN (ADD Vx, byte)
-    pub const ADD_VX_NN: u8 = 0x7;
+    pub const ADD_VX_NN: u8  = 0x7;
     /// ANNN (LD I, addr)
-    pub const LD_I_NNN: u8 = 0xA;
+    pub const LD_I_NNN: u8   = 0xA;
+    /// BNNN (JP V0, addr)
+    pub const JP_V0_ADDR: u8 = 0xB;
     /// CXNN (RND Vx, byte)
-    pub const RND_X_NN: u8  = 0xC;
+    pub const RND_X_NN: u8   = 0xC;
     /// DXYN (DRW Vx, Vy, byte)
-    pub const DRW_X_Y_N: u8 = 0xD;
+    pub const DRW_X_Y_N: u8  = 0xD;
 }
 
 /// Returns true if the program can fit in VM memory.
@@ -88,6 +96,12 @@ pub fn op_x(bytecode: &[u8], cursor: usize) -> u8 {
 pub fn op_n(bytecode: &[u8], cursor: usize) -> u8 {
     let data = bytecode[cursor + 1];
     data & 0b1111
+}
+
+// Encode a a bare instruction, which has no arguments.
+pub fn encode_bare(opcode: u8) -> [u8; 2] {
+    trace!("encode 0x{:03X}", opcode);
+    [0, opcode]
 }
 
 pub fn encode_xnn(opcode: u8, vx: u8, nn: u8) -> [u8; 2] {

@@ -100,7 +100,8 @@ impl<'a> TokenStream<'a> {
     /// Return the current token and advance the cursor.
     ///
     /// The consumed token must match the given token type, otherwise
-    /// a parsing error is returned.
+    /// a parsing error is returned. The cursor is not advanced if
+    /// the token kind does not match.
     ///
     /// # Errors
     ///

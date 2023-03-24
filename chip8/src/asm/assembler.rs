@@ -564,6 +564,8 @@ impl<'a> Assembler<'a> {
     }
 
     fn parse_mnemonic(&mut self) -> Chip8Result<()> {
+        use Keyword as KW;
+
         trace!("parse mnemonic");
         debug_assert!(matches!(
             self.stream.peek_kind(),
@@ -574,12 +576,15 @@ impl<'a> Assembler<'a> {
 
         if let TokenKind::Keyword(keyword) = name.kind {
             match keyword {
-                Keyword::Jump => self.parse_jump(name)?,
-                Keyword::Load => self.parse_load(name)?,
-                Keyword::Add => self.parse_add(name)?,
-                Keyword::Random => self.parse_random(name)?,
-                Keyword::Draw => self.parse_draw(name)?,
-                Keyword::SkipEq => self.parse_skip_eq(name)?,
+                KW::Add => self.parse_add(name)?,
+                KW::Call => self.parse_call(name)?,
+                KW::Clear => self.parse_clear_screen(name)?,
+                KW::Draw => self.parse_draw(name)?,
+                KW::Jump => self.parse_jump(name)?,
+                KW::Load => self.parse_load(name)?,
+                KW::Random => self.parse_random(name)?,
+                KW::Return => self.parse_return(name)?,
+                KW::SkipEq => self.parse_skip_eq(name)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -590,8 +595,55 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    fn parse_jump(&mut self, _name: Token) -> Chip8Result<()> {
+    fn parse_clear_screen(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_clear_screen");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Clear));
+        self.emit2(encode_bare(CLS));
+        Ok(())
+    }
+
+    fn parse_return(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_return");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Return));
+        self.emit2(encode_bare(RET));
+        Ok(())
+    }
+
+    /// Parse Jump
+    ///
+    /// 1nnn (JP addr)
+    /// Bnnn (JP V0, addr)
+    fn parse_jump(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_jump");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Jump));
+
+        // Jump can optionally take the V0 register as an offset.
+        let opcode: u8 = {
+            match self
+                .stream
+                .peek_kind()
+                .ok_or_else(|| self.eof_error("register, number literal or label"))?
+            {
+                TokenKind::Keyword(keyword) if keyword.is_vregister() => {
+                    match keyword {
+                        Keyword::V0 => {
+                            let _v0 = self.stream.consume(TokenKind::Keyword(Keyword::V0))?;
+                            let _comma = self.stream.consume(TokenKind::Comma)?;
+                            JP_V0_ADDR
+                        }
+                        other => {
+                            // V1-VF
+                            let token = self.stream.next_token().unwrap();
+                            let message = format!(
+                                "only register V0 is supported as a jump offset, not {other:?}"
+                            );
+                            return Err(self.error(token, message));
+                        }
+                    }
+                }
+                _ => JP_ADDR,
+            }
+        };
 
         let nnn = self.parse_nnn()?;
 
@@ -603,15 +655,45 @@ impl<'a> Assembler<'a> {
                         "argument for jump address must be 12-bits",
                     ));
                 }
-                self.emit2(encode_nnn(JP_ADDR, number.value));
+                self.emit2(encode_nnn(opcode, number.value));
             }
             Addr::Label(label) => {
                 // NOTE: If label is not defined yet,address 0x000 is inserted as a placeholder.
                 //       Error handling is in the fix_labels pass.
                 let number = self.resolve_label(label).unwrap_or_default() & 0xFFF;
-                self.emit2(encode_nnn(JP_ADDR, number));
+                self.emit2(encode_nnn(opcode, number));
             }
         }
+        Ok(())
+    }
+
+    /// Parse Call
+    ///
+    /// 2NNN (CALL addr)
+    fn parse_call(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_call");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Call));
+
+        let nnn = self.parse_nnn()?;
+
+        match nnn {
+            Addr::Num(number) => {
+                if number.value > 0xFFF {
+                    return Err(self.error(
+                        number.token.clone(),
+                        "argument for call address must be 12-bits",
+                    ));
+                }
+                self.emit2(encode_nnn(CALL_ADDR, number.value));
+            }
+            Addr::Label(label) => {
+                // NOTE: If label is not defined yet,address 0x000 is inserted as a placeholder.
+                //       Error handling is in the fix_labels pass.
+                let number = self.resolve_label(label).unwrap_or_default() & 0xFFF;
+                self.emit2(encode_nnn(CALL_ADDR, number));
+            }
+        }
+
         Ok(())
     }
 
