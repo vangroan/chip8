@@ -15,6 +15,10 @@ pub mod opcodes {
     pub const CALL_ADDR: u8  = 0x2;
     /// 3XNN (SE Vx, byte)
     pub const SE_VX_NN: u8   = 0x3;
+    /// 4xNN (SNE Vx, byte)
+    pub const SNE_VX_NN: u8  = 0x4;
+    /// 5xy0 (SE Vx, Vy)
+    pub const SE_VX_VY: u8   = 0x4;
     /// Load (LD Vx, byte)
     pub const LD_VX_NN: u8   = 0x6;
     /// 7XNN (ADD Vx, byte)

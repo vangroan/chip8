@@ -382,30 +382,32 @@ impl<'a> Assembler<'a> {
     }
 
     fn parse_arg2(&mut self) -> Chip8Result<[Token; 2]> {
-        let vx = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+        let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
         let _comma = self.stream.consume(TokenKind::Comma)?;
-        let mut nnn = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+        let src = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
 
-        // Labels start with a dot
-        if nnn.kind == TokenKind::Dot {
-            let ident = self.stream.consume(TokenKind::Ident)?;
+        match src.kind {
+            TokenKind::Number | TokenKind::Keyword(_) => Ok([dst, src]),
+            TokenKind::Dot => {
+                let ident = self.stream.consume(TokenKind::Ident)?;
 
-            // Transform the identifier into a label for ease of use.
-            // Technically the grammar is now no longer context-free.
-            nnn = Token {
-                kind: TokenKind::Label,
-                // FIXME: merging spans breaks label lookup later.
-                // span: nnn.span + ident.span,
-                span: ident.span,
-            };
-        } else if nnn.kind != TokenKind::Number {
-            // TODO: Should number be parsed here?
-            let kind = nnn.kind;
-            let message = format!("expected number literal or label, but found {kind:?}");
-            return Err(self.error(nnn, message));
+                // Transform the identifier into a label for ease of use.
+                // Technically the grammar is now no longer context-free.
+                let nnn = Token {
+                    kind: TokenKind::Label,
+                    // FIXME: merging spans breaks label lookup later.
+                    // span: nnn.span + ident.span,
+                    span: ident.span,
+                };
+
+                Ok([dst, nnn])
+            }
+            _ => {
+                let kind = src.kind;
+                let message = format!("expected number literal or label, but found {kind:?}");
+                Err(self.error(src, message))
+            }
         }
-
-        Ok([vx, nnn])
     }
 
     fn parse_xnn(&mut self) -> Chip8Result<(u8, Number)> {
@@ -585,6 +587,7 @@ impl<'a> Assembler<'a> {
                 KW::Random => self.parse_random(name)?,
                 KW::Return => self.parse_return(name)?,
                 KW::SkipEq => self.parse_skip_eq(name)?,
+                KW::SkipEqNot => self.parse_skip_neq(name)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -698,12 +701,51 @@ impl<'a> Assembler<'a> {
     }
 
     /// 3XNN (SE Vx, byte)
+    /// 5xy0 (SE Vx, Vy)
     fn parse_skip_eq(&mut self, _name: Token) -> Chip8Result<()> {
+        use Keyword as KW;
+        use TokenKind as TK;
+
         trace!("parse_skip_eq");
+
+        let [lhs, rhs] = self.parse_arg2()?;
+        let signature = [lhs.kind, rhs.kind];
+        match signature {
+            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
+                let vx = self.parse_vregister(lhs)?;
+                let nn = self.parse_number(rhs)?;
+                self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
+            }
+            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
+                let vx = self.parse_vregister(lhs)?;
+                let vy = self.parse_vregister(rhs)?;
+                self.emit2(encode_xyn(SE_VX_VY, vx, vy, 0));
+            }
+            [TK::Keyword(kw), _] if kw.is_vregister() => {
+                let kind = rhs.kind;
+                return Err(self.error(
+                    rhs,
+                    format!("expected register or number literal, but found {kind:?}"),
+                ));
+            }
+            _ => {
+                let kind = lhs.kind;
+                return Err(self.error(rhs, format!("expected register, but found {kind:?}")));
+            }
+        }
+        // let (vx, nn) = self.parse_xnn()?;
+        self.consume_eos()?;
+        // self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
+        Ok(())
+    }
+
+    /// 4xNN (SNE Vx, byte)
+    fn parse_skip_neq(&mut self, _name: Token) -> Chip8Result<()> {
+        trace!("parse_skip_neq");
 
         let (vx, nn) = self.parse_xnn()?;
         self.consume_eos()?;
-        self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
+        self.emit2(encode_xnn(SNE_VX_NN, vx, nn.as_u8()));
         Ok(())
     }
 
