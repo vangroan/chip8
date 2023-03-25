@@ -80,6 +80,8 @@ impl<'a> Lexer<'a> {
             '.' => self.make_token(TK::Dot),
             ':' => self.make_token(TK::Colon),
             ';' => self.make_token(TK::Semicolon),
+            '[' => self.make_token(TK::LeftBracket),
+            ']' => self.make_token(TK::RightBracket),
             '\r' => {
                 // Windows :(
                 if self.cursor.peek() == '\n' {

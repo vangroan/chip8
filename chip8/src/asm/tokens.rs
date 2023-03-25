@@ -17,6 +17,8 @@ pub enum TokenKind {
     Dot,       // .
     Colon,     // :
     Semicolon, // ;
+    LeftBracket,  // [
+    RightBracket, // ]
     /// Line-feed and optionally a carriage return
     Newline,
 
@@ -154,6 +156,7 @@ pub enum Keyword {
     Decimal,   // BCD
     Delay,     // DT
     Index,     // I
+    Array,     // [I]
     Key,       // K
     Sound,     // ST
 

@@ -382,12 +382,24 @@ impl<'a> Assembler<'a> {
     }
 
     fn parse_arg2(&mut self) -> Chip8Result<[Token; 2]> {
-        let dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+        let mut dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+
+        // [I]
+        if dst.kind == TokenKind::LeftBracket {
+            let index_token = self.stream.consume(TokenKind::Keyword(Keyword::Index))?;
+            let right_bracket = self.stream.consume(TokenKind::RightBracket)?;
+            dst = Token {
+                kind: TokenKind::Keyword(Keyword::Array),
+                span: dst.span + index_token.span + right_bracket.span,
+            };
+        }
+
         let _comma = self.stream.consume(TokenKind::Comma)?;
         let src = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
 
         match src.kind {
             TokenKind::Number | TokenKind::Keyword(_) => Ok([dst, src]),
+            // Label
             TokenKind::Dot => {
                 let ident = self.stream.consume(TokenKind::Ident)?;
 
@@ -401,6 +413,16 @@ impl<'a> Assembler<'a> {
                 };
 
                 Ok([dst, nnn])
+            }
+            // [I]
+            TokenKind::LeftBracket => {
+                let index_token = self.stream.consume(TokenKind::Keyword(Keyword::Index))?;
+                let right_bracket = self.stream.consume(TokenKind::RightBracket)?;
+                let array = Token {
+                    kind: TokenKind::Keyword(Keyword::Array),
+                    span: src.span + index_token.span + right_bracket.span,
+                };
+                Ok([dst, array])
             }
             _ => {
                 let kind = src.kind;
@@ -703,7 +725,6 @@ impl<'a> Assembler<'a> {
     /// 3XNN (SE Vx, byte)
     /// 5xy0 (SE Vx, Vy)
     fn parse_skip_eq(&mut self, _name: Token) -> Chip8Result<()> {
-        use Keyword as KW;
         use TokenKind as TK;
 
         trace!("parse_skip_eq");
@@ -774,7 +795,7 @@ impl<'a> Assembler<'a> {
         let signature = [dst.kind, src.kind];
 
         match signature {
-            // 6XNN (LD Vx, byte)
+            // 6xnn (LD Vx, byte)
             //
             // Load byte literal into Vx register
             [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
@@ -782,7 +803,13 @@ impl<'a> Assembler<'a> {
                 let nn = self.parse_number(src)?;
                 self.emit2(encode_xnn(LD_VX_NN, vx, nn.as_u8()))
             }
-            // ANNN (LD I, addr)
+            // 8xy0 (LD Vx, byte)
+            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
+                let vx = kw1.as_vregister().unwrap_or_else(|| unreachable!());
+                let vy = kw2.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xyn(LD_VX_VY[0], vx, vy, LD_VX_VY[1]));
+            }
+            // Annn (LD I, addr)
             //
             // Load memory address into index register.
             [TK::Keyword(KW::Index), TK::Number] => {
@@ -801,13 +828,57 @@ impl<'a> Assembler<'a> {
             //
             // Load delay timer into Vx register
             [TK::Keyword(kw), TK::Keyword(KW::Delay)] if kw.is_vregister() => {
-                return Err(self.error(src, "not implemented yet"));
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_VX_DT[0], vx, LD_VX_DT[1]));
+            }
+            // Fx0A (LD Vx, K)
+            //
+            // Wait for a key press, store the value of the key in Vx.
+            [TK::Keyword(kw), TK::Keyword(KW::Key)] if kw.is_vregister() => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_VX_K[0], vx, LD_VX_K[1]));
+            }
+            // Fx15 (LD DT, Vx)
+            //
+            // Set delay timer = Vx
+            [TK::Keyword(KW::Delay), TK::Keyword(kw)] if kw.is_vregister() => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_DT_VX[0], vx, LD_DT_VX[1]));
+            }
+            // Fx18 (LD ST, Vx)
+            //
+            // Set sound timer = Vx
+            [TK::Keyword(KW::Sound), TK::Keyword(kw)] if kw.is_vregister() => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_ST_VX[0], vx, LD_ST_VX[1]));
+            }
+            // Fx29 (LD F, Vx)
+            //
+            // Set I = location of sprite for digit Vx
+            [TK::Keyword(KW::Char), TK::Keyword(kw)] if kw.is_vregister() => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_F_VX[0], vx, LD_F_VX[1]));
+            }
+            // Fx33 (LD BCD, Vx)
+            //
+            // Store BCD representation of Vx in memory locations I, I+1, and I+2
+            [TK::Keyword(KW::Decimal), TK::Keyword(kw)] if kw.is_vregister() => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_B_VX[0], vx, LD_B_VX[1]));
             }
             // Fx55 (LD [I], Vx)
             //
-            // Load registers into memory block.
-            [TK::Keyword(KW::Index), TK::Keyword(kw)] if kw.is_vregister() => {
-                return Err(self.error(dst, "not implemented yet"));
+            // Store registers V0 through Vx in memory starting at location I
+            [TK::Keyword(KW::Array), TK::Keyword(kw)] if kw.is_vregister() => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_ARR_VX[0], vx, LD_ARR_VX[1]));
+            }
+            // Fx65 (LD Vx, [I])
+            //
+            // Load registers V0 through Vx from memory starting at location I
+            [TK::Keyword(kw), TK::Keyword(KW::Array)] if kw.is_vregister() => {
+                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+                self.emit2(encode_xnn(LD_VX_ARR[0], vx, LD_VX_ARR[1]));
             }
             [TK::Keyword(kw), _] if kw.is_vregister() => {
                 let kind = src.kind;
@@ -816,7 +887,8 @@ impl<'a> Assembler<'a> {
             }
             [TK::Keyword(_), _] => {
                 let kind = src.kind;
-                let message = format!("expected address, label or register, but found {kind:?}");
+                let message =
+                    format!("expected address, label, register 'DT' or 'K', but found {kind:?}");
                 return Err(self.error(src, message));
             }
             _ => {
@@ -843,7 +915,7 @@ impl<'a> Assembler<'a> {
     fn parse_random(&mut self, _name: Token) -> Chip8Result<()> {
         let (vx, nn) = self.parse_xnn()?;
         self.consume_eos()?;
-        self.emit2(encode_xnn(RND_X_NN, vx, nn.as_u8()));
+        self.emit2(encode_xnn(RND_VX_NN, vx, nn.as_u8()));
         Ok(())
     }
 
@@ -853,7 +925,7 @@ impl<'a> Assembler<'a> {
             return Err(self.error(n.token, "argument must be 15 or less (<= 0xF)"));
         }
         self.consume_eos()?;
-        self.emit2(encode_xyn(DRW_X_Y_N, vx, vy, n.as_u8()));
+        self.emit2(encode_xyn(DRW_VX_VY_N, vx, vy, n.as_u8()));
         Ok(())
     }
 }

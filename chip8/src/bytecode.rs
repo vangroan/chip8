@@ -9,28 +9,70 @@ pub mod opcodes {
     pub const CLS: u8        = 0xE0;
     /// 00EE (RET)
     pub const RET: u8        = 0xEE;
-    /// 1NNN (JP addr)
+    /// 1nnn (JP addr)
     pub const JP_ADDR: u8    = 0x1;
-    /// 2NNN (CALL addr)
+    /// 2nnn (CALL addr)
     pub const CALL_ADDR: u8  = 0x2;
-    /// 3XNN (SE Vx, byte)
+    /// 3xnn (SE Vx, byte)
     pub const SE_VX_NN: u8   = 0x3;
-    /// 4xNN (SNE Vx, byte)
+    /// 4xnn (SNE Vx, byte)
     pub const SNE_VX_NN: u8  = 0x4;
     /// 5xy0 (SE Vx, Vy)
     pub const SE_VX_VY: u8   = 0x4;
-    /// Load (LD Vx, byte)
+    /// 6xnn (LD Vx, byte)
     pub const LD_VX_NN: u8   = 0x6;
-    /// 7XNN (ADD Vx, byte)
+    /// 7xnn (ADD Vx, byte)
     pub const ADD_VX_NN: u8  = 0x7;
-    /// ANNN (LD I, addr)
-    pub const LD_I_NNN: u8   = 0xA;
-    /// BNNN (JP V0, addr)
-    pub const JP_V0_ADDR: u8 = 0xB;
-    /// CXNN (RND Vx, byte)
-    pub const RND_X_NN: u8   = 0xC;
-    /// DXYN (DRW Vx, Vy, byte)
-    pub const DRW_X_Y_N: u8  = 0xD;
+    /// 8xy0 (LD Vx, byte)
+    pub const LD_VX_VY: [u8; 2]    = [0x8, 0x0];
+    /// 8xy1 (OR Vx, Vy)
+    pub const OR_VX_VY: [u8; 2]    = [0x8, 0x1];
+    /// 8xy2 (AND Vx, Vy)
+    pub const AND_VX_VY: [u8; 2]   = [0x8, 0x2];
+    /// 8xy3 (XOR Vx, Vy)
+    pub const XOR_VX_VY: [u8; 2]   = [0x8, 0x3];
+    /// 8xy4 (ADD Vx, Vy)
+    pub const ADD_VX_VY: [u8; 2]   = [0x8, 0x4];
+    /// 8xy5 (SUB Vx, Vy)
+    pub const SUB_VX_VY: [u8; 2]   = [0x8, 0x5];
+    /// 8xy6 (SHR Vx {, Vy})
+    pub const SHR_VX_VY: [u8; 2]   = [0x8, 0x6];
+    /// 8xy7 (SUBN Vx, Vy)
+    pub const SUBN_VX_VY: [u8; 2]  = [0x8, 0x7];
+    /// 8xyE (SHL Vx {, Vy})
+    pub const SHL_VX_VY: [u8; 2]   = [0x8, 0xE];
+    /// 9xy0 (SNE Vx, Vy)
+    pub const SNE_VX_VY: u8   = 0x9;
+    /// Annn (LD I, addr)
+    pub const LD_I_NNN: u8    = 0xA;
+    /// Bnnn (JP V0, addr)
+    pub const JP_V0_ADDR: u8  = 0xB;
+    /// Cxnn (RND Vx, byte)
+    pub const RND_VX_NN: u8   = 0xC;
+    /// Dxyn (DRW Vx, Vy, byte)
+    pub const DRW_VX_VY_N: u8 = 0xD;
+    /// Ex9E (SKP Vx)
+    pub const SKP_VX_VY_N: [u8; 2]  = [0xE, 0x90];
+    /// ExA1 (SKNP Vx)
+    pub const SKNP_VX: [u8; 2]      = [0xE, 0xA1];
+    /// Fx07 (LD Vx, DT)
+    pub const LD_VX_DT: [u8; 2]     = [0xF, 0x07];
+    /// Fx0A (LD Vx, K)
+    pub const LD_VX_K: [u8; 2]      = [0xF, 0x0A];
+    /// Fx15 (LD DT, Vx)
+    pub const LD_DT_VX: [u8; 2]     = [0xF, 0x15];
+    /// Fx18 (LD ST, Vx)
+    pub const LD_ST_VX: [u8; 2]     = [0xF, 0x18];
+    /// Fx1E (ADD I, Vx)
+    pub const ADD_I_VX: [u8; 2]     = [0xF, 0x1E];
+    /// Fx29 (LD F, Vx)
+    pub const LD_F_VX: [u8; 2]      = [0xF, 0x29];
+    /// Fx33 (LD B, Vx)
+    pub const LD_B_VX: [u8; 2]      = [0xF, 0x33];
+    /// Fx55 (LD [I], Vx)
+    pub const LD_ARR_VX: [u8; 2]    = [0xF, 0x55];
+    /// Fx65 (LD Vx, [I])
+    pub const LD_VX_ARR: [u8; 2]    = [0xF, 0x65];
 }
 
 /// Returns true if the program can fit in VM memory.
