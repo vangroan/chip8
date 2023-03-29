@@ -137,7 +137,7 @@ pub enum Keyword {
     Load,         // LD
     Jump,         // JP
     Or,           // OR
-    ShiftLeft,    // SHR
+    ShiftLeft,    // SHL
     ShiftRight,   // SHR
     SkipEq,       // SE
     SkipEqNot,    // SNE

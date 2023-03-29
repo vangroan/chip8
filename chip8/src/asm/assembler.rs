@@ -1,5 +1,5 @@
 //! Assembler
-use log::{debug, error, info, trace};
+use log::{debug, info, trace};
 
 use crate::{
     bytecode::{opcodes::*, *},
@@ -606,10 +606,13 @@ impl<'a> Assembler<'a> {
                 KW::Draw => self.parse_draw(name)?,
                 KW::Jump => self.parse_jump(name)?,
                 KW::Load => self.parse_load(name)?,
+                KW::Or => self.parse_or(name)?,
                 KW::Random => self.parse_random(name)?,
                 KW::Return => self.parse_return(name)?,
                 KW::SkipEq => self.parse_skip_eq(name)?,
                 KW::SkipEqNot => self.parse_skip_neq(name)?,
+                KW::Sub => self.parse_sub(name)?,
+                KW::SubN => self.parse_subn(name)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -732,11 +735,13 @@ impl<'a> Assembler<'a> {
         let [lhs, rhs] = self.parse_arg2()?;
         let signature = [lhs.kind, rhs.kind];
         match signature {
+            // 3XNN (SE Vx, byte)
             [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
                 let vx = self.parse_vregister(lhs)?;
                 let nn = self.parse_number(rhs)?;
                 self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
             }
+            // 5xy0 (SE Vx, Vy)
             [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
                 let vx = self.parse_vregister(lhs)?;
                 let vy = self.parse_vregister(rhs)?;
@@ -754,25 +759,54 @@ impl<'a> Assembler<'a> {
                 return Err(self.error(rhs, format!("expected register, but found {kind:?}")));
             }
         }
-        // let (vx, nn) = self.parse_xnn()?;
+
         self.consume_eos()?;
-        // self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
         Ok(())
     }
 
     /// 4xNN (SNE Vx, byte)
+    /// 9xy0 (SNE Vx, Vy)
     fn parse_skip_neq(&mut self, _name: Token) -> Chip8Result<()> {
+        use TokenKind as TK;
+
         trace!("parse_skip_neq");
 
-        let (vx, nn) = self.parse_xnn()?;
+        let [lhs, rhs] = self.parse_arg2()?;
+        let signature = [lhs.kind, rhs.kind];
+        match signature {
+            // 4xNN (SNE Vx, byte)
+            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
+                let vx = self.parse_vregister(lhs)?;
+                let nn = self.parse_number(rhs)?;
+                self.emit2(encode_xnn(SNE_VX_NN, vx, nn.as_u8()));
+            }
+            // 9xy0 (SNE Vx, Vy)
+            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
+                let vx = self.parse_vregister(lhs)?;
+                let vy = self.parse_vregister(rhs)?;
+                self.emit2(encode_xyn(SNE_VX_VY, vx, vy, 0));
+            }
+            [TK::Keyword(kw), _] if kw.is_vregister() => {
+                let kind = rhs.kind;
+                return Err(self.error(
+                    rhs,
+                    format!("expected register or number literal, but found {kind:?}"),
+                ));
+            }
+            _ => {
+                let kind = lhs.kind;
+                return Err(self.error(rhs, format!("expected register, but found {kind:?}")));
+            }
+        }
+
         self.consume_eos()?;
-        self.emit2(encode_xnn(SNE_VX_NN, vx, nn.as_u8()));
         Ok(())
     }
 
     /// Load
     ///
     /// - 6XNN (LD Vx,  byte)
+    /// - 8xy0 (LD Vx, byte)
     /// - ANNN (LD I,   addr)
     /// - Fx07 (LD Vx,  DT)
     /// - Fx0A (LD Vx,  K)
@@ -905,11 +939,102 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
+    /// 7xnn (ADD Vx, byte)
+    /// 8xy4 (ADD Vx, Vy)
+    /// Fx1E (ADD I, Vx)
     fn parse_add(&mut self, _name: Token) -> Chip8Result<()> {
-        let (vx, nn) = self.parse_xnn()?;
+        use Keyword as KW;
+        use TokenKind as TK;
+
+        trace!("parse_add");
+
+        let [lhs, rhs] = self.parse_arg2()?;
+        let signature = [lhs.kind, rhs.kind];
+        match signature {
+            // 7xnn (ADD Vx, byte)
+            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
+                let vx = self.parse_vregister(lhs)?;
+                let nn = self.parse_number(rhs)?;
+                self.emit2(encode_xnn(ADD_VX_NN, vx, nn.as_u8()));
+            }
+            // 8xy4 (ADD Vx, Vy)
+            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
+                let vx = self.parse_vregister(lhs)?;
+                let vy = self.parse_vregister(rhs)?;
+                self.emit2(encode_xyn(ADD_VX_VY[0], vx, vy, ADD_VX_VY[1]));
+            }
+            // Fx1E (ADD I, Vx)
+            [TK::Keyword(KW::Index), TK::Keyword(kw2)] if kw2.is_vregister() => {
+                let vx = self.parse_vregister(rhs)?;
+                self.emit2(encode_xnn(ADD_I_VX[0], vx, ADD_I_VX[1]));
+            }
+            [TK::Keyword(kw), _] if kw.is_vregister() => {
+                let kind = rhs.kind;
+                return Err(self.error(
+                    rhs,
+                    format!("expected register or number literal, but found {kind:?}"),
+                ));
+            }
+            _ => {
+                let kind = lhs.kind;
+                return Err(self.error(rhs, format!("expected register, but found {kind:?}")));
+            }
+        }
+
         self.consume_eos()?;
-        self.emit2(encode_xnn(ADD_VX_NN, vx, nn.as_u8()));
         Ok(())
+    }
+
+    /// 8xy5 (SUB Vx, Vy)
+    fn parse_sub(&mut self, name: Token) -> Chip8Result<()> {
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Sub));
+        trace!("parse_sub");
+        let [dst, src] = self.parse_arg2()?;
+        let vx = self.parse_vregister(dst)?;
+        let vy = self.parse_vregister(src)?;
+        self.emit2(encode_xyn(SUB_VX_VY[0], vx, vy, SUB_VX_VY[1]));
+        self.consume_eos()?;
+        Ok(())
+    }
+
+    /// 8xy7 (SUBN Vx, Vy)
+    fn parse_subn(&mut self, name: Token) -> Chip8Result<()> {
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Sub));
+        trace!("parse_subn");
+        let [dst, src] = self.parse_arg2()?;
+        let vx = self.parse_vregister(dst)?;
+        let vy = self.parse_vregister(src)?;
+        self.emit2(encode_xyn(SUBN_VX_VY[0], vx, vy, SUBN_VX_VY[1]));
+        self.consume_eos()?;
+        Ok(())
+    }
+
+    /// 8xy1 (OR Vx, Vy)
+    fn parse_or(&mut self, name: Token) -> Chip8Result<()> {
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Or));
+        trace!("parse_or");
+        let [dst, src] = self.parse_arg2()?;
+        let vx = self.parse_vregister(dst)?;
+        let vy = self.parse_vregister(src)?;
+        self.emit2(encode_xyn(OR_VX_VY[0], vx, vy, OR_VX_VY[1]));
+        self.consume_eos()?;
+        Ok(())
+    }
+
+    fn parse_and(&mut self, _name: Token) -> Chip8Result<()> {
+        todo!()
+    }
+
+    fn parse_xor(&mut self, _name: Token) -> Chip8Result<()> {
+        todo!()
+    }
+
+    fn parse_shr(&mut self, _name: Token) -> Chip8Result<()> {
+        todo!()
+    }
+
+    fn parse_shl(&mut self, _name: Token) -> Chip8Result<()> {
+        todo!()
     }
 
     fn parse_random(&mut self, _name: Token) -> Chip8Result<()> {
@@ -937,5 +1062,57 @@ fn slice_number(fragment: &str) -> &str {
         "0"
     } else {
         rest
+    }
+}
+
+// ----------------------------------------------------------------------------
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[rustfmt::skip]
+    const CASES: &[(u16, &str)] = &[
+        (0x00E0, "CLS"),
+        (0x00EE, "RET"),
+        (0x1201, "JP   0x201"),
+        (0x1ABC, "JP   0xABC"),
+        (0x2204, "CALL 0x204"),
+        (0x2A21, "CALL 0xA21"),
+        (0x3123, "SE   v1, 0x23"),
+        (0x3207, "SE   v2, 0x7"),
+        (0x4305, "SNE  v3, 0x5"),
+        (0x4406, "SNE  v4, 0x6"),
+        (0x5120, "SE   v1, v2"),
+        (0x5340, "SE   v3, v4"),
+        (0x6143, "LD   v1, 0x43"),
+        (0x6283, "LD   v2, 0x83"),
+        (0x7124, "ADD  v1, 0x24"),
+        (0x7258, "ADD  v2, 0x58"),
+        (0x8120, "LD   v1, v2"),
+        (0x8340, "LD   v3, v4"),
+        (0x8121, "OR   v1, v2"),
+        (0x8341, "OR   v3, v4"),
+    ];
+
+    #[test]
+    fn test_assembly_parse() {
+        for (expected, source_code) in CASES {
+            let lexer = Lexer::new(source_code);
+            let assembler = Assembler::new(lexer);
+            let actual = assembler
+                .parse()
+                .unwrap_or_else(|err| panic!("failed to parse: {err}"));
+            let expected = split_bytecode(*expected);
+            assert_eq!(
+                &expected,
+                actual.as_slice(),
+                "unexpected compiled bytecode for: {}",
+                source_code
+            );
+        }
+    }
+
+    fn split_bytecode(bytecode: u16) -> [u8; 2] {
+        [((bytecode & 0xFF00) >> 8) as u8, bytecode as u8]
     }
 }

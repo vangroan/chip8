@@ -18,7 +18,7 @@ pub mod opcodes {
     /// 4xnn (SNE Vx, byte)
     pub const SNE_VX_NN: u8  = 0x4;
     /// 5xy0 (SE Vx, Vy)
-    pub const SE_VX_VY: u8   = 0x4;
+    pub const SE_VX_VY: u8   = 0x5;
     /// 6xnn (LD Vx, byte)
     pub const LD_VX_NN: u8   = 0x6;
     /// 7xnn (ADD Vx, byte)
