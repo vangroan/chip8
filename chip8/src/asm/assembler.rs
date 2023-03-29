@@ -587,32 +587,36 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
+    #[rustfmt::skip]
     fn parse_mnemonic(&mut self) -> Chip8Result<()> {
         use Keyword as KW;
 
         trace!("parse mnemonic");
-        debug_assert!(matches!(
-            self.stream.peek_kind(),
-            Some(TokenKind::Keyword(_))
-        ));
+        debug_assert!(matches!(self.stream.peek_kind(), Some(TokenKind::Keyword(_))));
 
         let name = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
 
         if let TokenKind::Keyword(keyword) = name.kind {
             match keyword {
-                KW::Add => self.parse_add(name)?,
-                KW::Call => self.parse_call(name)?,
-                KW::Clear => self.parse_clear_screen(name)?,
-                KW::Draw => self.parse_draw(name)?,
-                KW::Jump => self.parse_jump(name)?,
-                KW::Load => self.parse_load(name)?,
-                KW::Or => self.parse_or(name)?,
+                KW::Add    => self.parse_add(name)?,
+                KW::And    => self.parse_arithmetic(AND_VX_VY)?,
+                KW::Call   => self.parse_call(name)?,
+                KW::Clear  => self.parse_clear_screen(name)?,
+                KW::Draw   => self.parse_draw(name)?,
+                KW::Jump   => self.parse_jump(name)?,
+                KW::Load   => self.parse_load(name)?,
+                KW::Or     => self.parse_arithmetic(OR_VX_VY)?,
                 KW::Random => self.parse_random(name)?,
                 KW::Return => self.parse_return(name)?,
                 KW::SkipEq => self.parse_skip_eq(name)?,
-                KW::SkipEqNot => self.parse_skip_neq(name)?,
-                KW::Sub => self.parse_sub(name)?,
-                KW::SubN => self.parse_subn(name)?,
+                KW::SkipEqNot  => self.parse_skip_neq(name)?,
+                KW::SkipKey    => self.parse_skip_key(name, true)?,
+                KW::SkipKeyNot => self.parse_skip_key(name, false)?,
+                KW::ShiftLeft  => self.parse_arithmetic(SHL_VX_VY)?,
+                KW::ShiftRight => self.parse_arithmetic(SHR_VX_VY)?,
+                KW::Sub    => self.parse_arithmetic(SUB_VX_VY)?,
+                KW::SubN   => self.parse_arithmetic(SUBN_VX_VY)?,
+                KW::Xor    => self.parse_arithmetic(XOR_VX_VY)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -727,10 +731,11 @@ impl<'a> Assembler<'a> {
 
     /// 3XNN (SE Vx, byte)
     /// 5xy0 (SE Vx, Vy)
-    fn parse_skip_eq(&mut self, _name: Token) -> Chip8Result<()> {
+    fn parse_skip_eq(&mut self, name: Token) -> Chip8Result<()> {
         use TokenKind as TK;
 
         trace!("parse_skip_eq");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::SkipEq));
 
         let [lhs, rhs] = self.parse_arg2()?;
         let signature = [lhs.kind, rhs.kind];
@@ -766,10 +771,11 @@ impl<'a> Assembler<'a> {
 
     /// 4xNN (SNE Vx, byte)
     /// 9xy0 (SNE Vx, Vy)
-    fn parse_skip_neq(&mut self, _name: Token) -> Chip8Result<()> {
+    fn parse_skip_neq(&mut self, name: Token) -> Chip8Result<()> {
         use TokenKind as TK;
 
         trace!("parse_skip_neq");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::SkipEqNot));
 
         let [lhs, rhs] = self.parse_arg2()?;
         let signature = [lhs.kind, rhs.kind];
@@ -800,6 +806,28 @@ impl<'a> Assembler<'a> {
         }
 
         self.consume_eos()?;
+        Ok(())
+    }
+
+    fn parse_skip_key(&mut self, name: Token, equals: bool) -> Chip8Result<()> {
+        trace!("parse_skip_key");
+        debug_assert!(matches!(
+            name.kind,
+            TokenKind::Keyword(Keyword::SkipKey | Keyword::SkipKeyNot)
+        ));
+
+        let arg = self
+            .stream
+            .next_token()
+            .ok_or_else(|| self.eof_error("Vx register"))?;
+        let vx = self.parse_vregister(arg)?;
+
+        if equals {
+            self.emit2(encode_xnn(SKP_VX[0], vx, SKP_VX[1]));
+        } else {
+            self.emit2(encode_xnn(SKNP_VX[0], vx, SKNP_VX[1]));
+        }
+
         Ok(())
     }
 
@@ -985,59 +1013,34 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    /// 8xy5 (SUB Vx, Vy)
-    fn parse_sub(&mut self, name: Token) -> Chip8Result<()> {
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Sub));
-        trace!("parse_sub");
+    /// Parse binary arithmetic mnemonic.
+    ///
+    /// Common parselet that will handle the following case:
+    ///
+    /// 1. The keyword is for a mnemonic that has only one form (Vx, Vy)
+    /// 2. The opcode is identified by two bytes
+    ///
+    /// These opcodes satisfy the above.
+    ///
+    /// - 8xy1 (OR Vx, Vy)
+    /// - 8xy2 (AND Vx, Vy)
+    /// - 8xy3 (XOR Vx, Vy)
+    /// - 8xy5 (SUB Vx, Vy)
+    /// - 8xy6 (SHR Vx {, Vy})
+    /// - 8xy7 (SUBN Vx, Vy)
+    /// - 8xyE (SHL Vx {, Vy})
+    fn parse_arithmetic(&mut self, opcode: [u8; 2]) -> Chip8Result<()> {
+        trace!("parse_arithmetic");
         let [dst, src] = self.parse_arg2()?;
         let vx = self.parse_vregister(dst)?;
         let vy = self.parse_vregister(src)?;
-        self.emit2(encode_xyn(SUB_VX_VY[0], vx, vy, SUB_VX_VY[1]));
+        self.emit2(encode_xyn(opcode[0], vx, vy, opcode[1]));
         self.consume_eos()?;
         Ok(())
-    }
-
-    /// 8xy7 (SUBN Vx, Vy)
-    fn parse_subn(&mut self, name: Token) -> Chip8Result<()> {
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Sub));
-        trace!("parse_subn");
-        let [dst, src] = self.parse_arg2()?;
-        let vx = self.parse_vregister(dst)?;
-        let vy = self.parse_vregister(src)?;
-        self.emit2(encode_xyn(SUBN_VX_VY[0], vx, vy, SUBN_VX_VY[1]));
-        self.consume_eos()?;
-        Ok(())
-    }
-
-    /// 8xy1 (OR Vx, Vy)
-    fn parse_or(&mut self, name: Token) -> Chip8Result<()> {
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Or));
-        trace!("parse_or");
-        let [dst, src] = self.parse_arg2()?;
-        let vx = self.parse_vregister(dst)?;
-        let vy = self.parse_vregister(src)?;
-        self.emit2(encode_xyn(OR_VX_VY[0], vx, vy, OR_VX_VY[1]));
-        self.consume_eos()?;
-        Ok(())
-    }
-
-    fn parse_and(&mut self, _name: Token) -> Chip8Result<()> {
-        todo!()
-    }
-
-    fn parse_xor(&mut self, _name: Token) -> Chip8Result<()> {
-        todo!()
-    }
-
-    fn parse_shr(&mut self, _name: Token) -> Chip8Result<()> {
-        todo!()
-    }
-
-    fn parse_shl(&mut self, _name: Token) -> Chip8Result<()> {
-        todo!()
     }
 
     fn parse_random(&mut self, _name: Token) -> Chip8Result<()> {
+        trace!("parse_random");
         let (vx, nn) = self.parse_xnn()?;
         self.consume_eos()?;
         self.emit2(encode_xnn(RND_VX_NN, vx, nn.as_u8()));
@@ -1045,6 +1048,7 @@ impl<'a> Assembler<'a> {
     }
 
     fn parse_draw(&mut self, _name: Token) -> Chip8Result<()> {
+        trace!("parse_draw");
         let (vx, vy, n) = self.parse_xyn()?;
         if n.value > 0xF {
             return Err(self.error(n.token, "argument must be 15 or less (<= 0xF)"));
@@ -1069,6 +1073,7 @@ fn slice_number(fragment: &str) -> &str {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::bytecode::{opcodes::*, *};
 
     #[rustfmt::skip]
     const CASES: &[(u16, &str)] = &[
@@ -1092,6 +1097,50 @@ mod test {
         (0x8340, "LD   v3, v4"),
         (0x8121, "OR   v1, v2"),
         (0x8341, "OR   v3, v4"),
+        (0x8132, "AND  v1, v3"),
+        (0x8462, "AND  v4, v6"),
+        (0x8123, "XOR  v1, v2"),
+        (0x8563, "XOR  v5, v6"),
+        (0x8125, "SUB  v1, v2"),
+        (0x8345, "SUB  v3, v4"),
+        (0x8126, "SHR  v1, v2"),
+        (0x8346, "SHR  v3, v4"),
+        (0x8127, "SUBN v1, v2"),
+        (0x8347, "SUBN v3, v4"),
+        (0x812E, "SHL  v1, v2"),
+        (0x834E, "SHL  v3, v4"),
+        (0x9120, "SNE  v1, v2"),
+        (0x9340, "SNE  v3, v4"),
+        (0xA204, "LD   I, 0x204"),
+        (0xAB21, "LD   I, 0xB21"),
+        (0xB204, "JP   v0, 0x204"),
+        (0xBA21, "JP   v0, 0xA21"),
+        (0xC123, "RAND v1, 0x23"),
+        (0xC245, "RAND v2, 0x45"),
+        (0xD124, "DRW  v1, v2, 0x4"),
+        (0xD348, "DRW  v3, v4, 0x8"),
+        (0xE19E, "SKP  v1"),
+        (0xE29E, "SKP  v2"),
+        (0xE1A1, "SKNP v1"),
+        (0xE2A1, "SKNP v2"),
+        (0xF107, "LD   v1, DT"),
+        (0xF207, "LD   v2, DT"),
+        (0xF10A, "LD   v1, K"),
+        (0xF20A, "LD   v2, K"),
+        (0xF115, "LD   DT, v1"),
+        (0xF215, "LD   DT, v2"),
+        (0xF118, "LD   ST, v1"),
+        (0xF218, "LD   ST, v2"),
+        (0xF11E, "ADD  I, v1"),
+        (0xF21E, "ADD  I, v2"),
+        (0xF129, "LD   F, v1"),
+        (0xF229, "LD   F, v2"),
+        (0xF133, "LD   BCD, v1"),
+        (0xF233, "LD   BCD, v2"),
+        (0xF155, "LD   [I], v1"),
+        (0xF255, "LD   [I], v2"),
+        (0xF165, "LD   v1, [I]"),
+        (0xF265, "LD   v2, [I]"),
     ];
 
     #[test]
@@ -1102,17 +1151,69 @@ mod test {
             let actual = assembler
                 .parse()
                 .unwrap_or_else(|err| panic!("failed to parse: {err}"));
-            let expected = split_bytecode(*expected);
+            let expected_parts = split_bytecode(*expected);
             assert_eq!(
-                &expected,
+                &expected_parts,
                 actual.as_slice(),
-                "unexpected compiled bytecode for: {}",
-                source_code
+                "unexpected compiled bytecode for: {}; expected 0x{:04X}, actual 0x{:04X}",
+                source_code,
+                expected,
+                merge_bytecode(&[actual.as_slice()[0], actual.as_slice()[1]])
             );
         }
     }
 
     fn split_bytecode(bytecode: u16) -> [u8; 2] {
         [((bytecode & 0xFF00) >> 8) as u8, bytecode as u8]
+    }
+
+    fn merge_bytecode(parts: &[u8; 2]) -> u16 {
+        (parts[0] as u16) << 8 | (parts[1] as u16)
+    }
+
+    /// SYS opcode is unsupported.
+    #[test]
+    fn test_sys_call() {
+        let source_code = "SYS 0x123";
+        let lexer = Lexer::new(source_code);
+        let assembler = Assembler::new(lexer);
+        let result = assembler.parse();
+
+        match result {
+            Err(Chip8Error::Multi(_) | Chip8Error::Asm(_)) => {}
+            Err(err) => panic!("unexpected error type: {:?}", err),
+            _ => panic!("parsing a SYS call must result in an assembly error"),
+        }
+    }
+
+    /// Test that labels are being correctly patched into the bytecode.
+    #[test]
+    fn test_label_patch() {
+        let source_code = r#"
+        .main                ;     0x200
+            LD   v0,  0      ; 000 0x200
+            LD   v1,  0      ; 002 0x202
+        .loop                ;     0x204
+            LD   I,  .right  ; 004 0x204
+            RAND v2, 1       ; 006 0x206
+            SE   v2, 1       ; 008 0x208
+            LD   I,  .left   ; 010 0x20A
+            DRW  v0, v1,  4  ; 012 0x20C
+            JP   .loop       ; 014 0x20E
+        .left                ;     0x210
+            0x80 0x40        ;     0x210
+            0x20 0x10        ;     0x212
+        .right               ;     0x214
+            0x20 0x40        ;     0x214
+            0x80 0x10        ;     0x216
+        "#;
+        let lexer = Lexer::new(source_code);
+        let assembler = Assembler::new(lexer);
+        let bytecode = assembler
+            .parse()
+            .unwrap_or_else(|err| panic!("failed to parse: {err}"));
+        assert_eq!([bytecode[4], bytecode[5]], encode_nnn(LD_I_NNN, 0x214));
+        assert_eq!([bytecode[10], bytecode[11]], encode_nnn(LD_I_NNN, 0x210));
+        assert_eq!([bytecode[14], bytecode[15]], encode_nnn(JP_ADDR, 0x204));
     }
 }

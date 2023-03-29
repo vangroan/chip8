@@ -52,7 +52,7 @@ pub mod opcodes {
     /// Dxyn (DRW Vx, Vy, byte)
     pub const DRW_VX_VY_N: u8 = 0xD;
     /// Ex9E (SKP Vx)
-    pub const SKP_VX_VY_N: [u8; 2]  = [0xE, 0x90];
+    pub const SKP_VX: [u8; 2]       = [0xE, 0x9E];
     /// ExA1 (SKNP Vx)
     pub const SKNP_VX: [u8; 2]      = [0xE, 0xA1];
     /// Fx07 (LD Vx, DT)
