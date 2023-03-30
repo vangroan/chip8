@@ -117,7 +117,11 @@ fn dump_bytecode(bytecode: &[u8]) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    simple_logger::SimpleLogger::new().env().init().unwrap();
+    simple_logger::SimpleLogger::new()
+        .env()
+        .without_timestamps()
+        .init()
+        .unwrap();
 
     match parse_args() {
         Some(Cmd::Run { filepath }) => run_bytecode(filepath)?,
