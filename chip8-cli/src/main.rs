@@ -148,10 +148,7 @@ fn parse_args() -> Option<Cmd> {
                 _ => None,
             }
         }
-        None => {
-            print_usage();
-            None
-        }
+        None => None,
     }
 }
 
@@ -159,10 +156,7 @@ fn parse_args() -> Option<Cmd> {
 fn consume_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
     match args.next() {
         Some(arg) => Some(arg),
-        None => {
-            print_usage();
-            None
-        }
+        None => None,
     }
 }
 
