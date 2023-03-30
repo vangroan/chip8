@@ -10,8 +10,7 @@ use crate::{
 use super::{
     lexer::Lexer,
     token_stream::TokenStream,
-    tokens::{Addr, NumFormat, Number, TokenKind},
-    tokens::{Keyword, Span, Token},
+    tokens::{Addr, Cmp, Keyword, NumFormat, Number, Span, Token, TokenKind},
 };
 
 /// Chip-8 assembler.
@@ -589,10 +588,10 @@ impl<'a> Assembler<'a> {
                 KW::Or     => self.parse_arithmetic_or(name)?,
                 KW::Random => self.parse_random(name)?,
                 KW::Return => self.parse_return(name)?,
-                KW::SkipEq => self.parse_skip_eq(name)?,
-                KW::SkipEqNot  => self.parse_skip_neq(name)?,
-                KW::SkipKey    => self.parse_skip_key(name, true)?,
-                KW::SkipKeyNot => self.parse_skip_key(name, false)?,
+                KW::SkipEq => self.parse_skip(name, Cmp::Eq)?,
+                KW::SkipEqNot  => self.parse_skip(name, Cmp::NotEq)?,
+                KW::SkipKey    => self.parse_skip_key(name, Cmp::Eq)?,
+                KW::SkipKeyNot => self.parse_skip_key(name, Cmp::NotEq)?,
                 KW::ShiftLeft  => self.parse_arithmetic_shl(name)?,
                 KW::ShiftRight => self.parse_arithmetic_shr(name)?,
                 KW::Sub    => self.parse_arithmetic_sub(name)?,
@@ -710,68 +709,43 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    /// 3xnn (SE Vx, byte)
-    /// 5xy0 (SE Vx, Vy)
-    fn parse_skip_eq(&mut self, name: Token) -> Chip8Result<()> {
+    /// Parse Skip
+    ///
+    /// - 3xnn (SE Vx, byte)
+    /// - 4xnn (SNE Vx, byte)
+    /// - 5xy0 (SE Vx, Vy)
+    /// - 9xy0 (SNE Vx, Vy)
+    fn parse_skip(&mut self, name: Token, cmp: Cmp) -> Chip8Result<()> {
+        use Keyword as KW;
         use TokenKind as TK;
 
         trace!("parse_skip_eq");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::SkipEq));
+        debug_assert!(matches!(name.kind, TK::Keyword(KW::SkipEq | KW::SkipEqNot)));
 
         let [lhs, rhs] = self.parse_arg2()?;
         let signature = [lhs.kind, rhs.kind];
         match signature {
-            // 3XNN (SE Vx, byte)
+            // 3xnn (SE Vx, byte)
+            // 4xnn (SNE Vx, byte)
             [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
                 let vx = self.parse_vregister(lhs)?;
                 let nn = self.parse_number(rhs)?;
-                self.emit2(encode_xnn(SE_VX_NN, vx, nn.as_u8()));
+                let opcode = match cmp {
+                    Cmp::Eq => SE_VX_NN,
+                    Cmp::NotEq => SNE_VX_NN,
+                };
+                self.emit2(encode_xnn(opcode, vx, nn.as_u8()));
             }
             // 5xy0 (SE Vx, Vy)
-            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
-                let vx = self.parse_vregister(lhs)?;
-                let vy = self.parse_vregister(rhs)?;
-                self.emit2(encode_xyn(SE_VX_VY, vx, vy, 0));
-            }
-            [TK::Keyword(kw), _] if kw.is_vregister() => {
-                let kind = rhs.kind;
-                return Err(self.error(
-                    rhs,
-                    format!("expected register or number literal, but found {kind:?}"),
-                ));
-            }
-            _ => {
-                let kind = lhs.kind;
-                return Err(self.error(rhs, format!("expected register, but found {kind:?}")));
-            }
-        }
-
-        self.consume_eos()?;
-        Ok(())
-    }
-
-    /// 4xnn (SNE Vx, byte)
-    /// 9xy0 (SNE Vx, Vy)
-    fn parse_skip_neq(&mut self, name: Token) -> Chip8Result<()> {
-        use TokenKind as TK;
-
-        trace!("parse_skip_neq");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::SkipEqNot));
-
-        let [lhs, rhs] = self.parse_arg2()?;
-        let signature = [lhs.kind, rhs.kind];
-        match signature {
-            // 4xNN (SNE Vx, byte)
-            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
-                let vx = self.parse_vregister(lhs)?;
-                let nn = self.parse_number(rhs)?;
-                self.emit2(encode_xnn(SNE_VX_NN, vx, nn.as_u8()));
-            }
             // 9xy0 (SNE Vx, Vy)
             [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
                 let vx = self.parse_vregister(lhs)?;
                 let vy = self.parse_vregister(rhs)?;
-                self.emit2(encode_xyn(SNE_VX_VY, vx, vy, 0));
+                let opcode = match cmp {
+                    Cmp::Eq => SE_VX_VY,
+                    Cmp::NotEq => SNE_VX_VY,
+                };
+                self.emit2(encode_xyn(opcode, vx, vy, 0));
             }
             [TK::Keyword(kw), _] if kw.is_vregister() => {
                 let kind = rhs.kind;
@@ -787,10 +761,15 @@ impl<'a> Assembler<'a> {
         }
 
         self.consume_eos()?;
+
         Ok(())
     }
 
-    fn parse_skip_key(&mut self, name: Token, equals: bool) -> Chip8Result<()> {
+    /// Parse Skip Key Pressed
+    ///
+    /// - Ex9E (SKP Vx)
+    /// - ExA1 (SKNP Vx)
+    fn parse_skip_key(&mut self, name: Token, cmp: Cmp) -> Chip8Result<()> {
         trace!("parse_skip_key");
         debug_assert!(matches!(
             name.kind,
@@ -803,10 +782,9 @@ impl<'a> Assembler<'a> {
             .ok_or_else(|| self.eof_error("Vx register"))?;
         let vx = self.parse_vregister(arg)?;
 
-        if equals {
-            self.emit2(encode_xnn(SKP_VX[0], vx, SKP_VX[1]));
-        } else {
-            self.emit2(encode_xnn(SKNP_VX[0], vx, SKNP_VX[1]));
+        match cmp {
+            Cmp::Eq => self.emit2(encode_xnn(SKP_VX[0], vx, SKP_VX[1])),
+            Cmp::NotEq => self.emit2(encode_xnn(SKNP_VX[0], vx, SKNP_VX[1])),
         }
 
         Ok(())

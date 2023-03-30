@@ -309,6 +309,12 @@ pub enum Addr {
     Label(Token),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum Cmp {
+    Eq,
+    NotEq,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
