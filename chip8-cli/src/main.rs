@@ -7,7 +7,7 @@ use chip8::{
     prelude::*,
     IMPL_VERSION,
 };
-use log::{error, info};
+use log::{debug, error, info};
 
 static USAGE: &str = r#"
 usage: chip8 CMD [FILE]
@@ -104,6 +104,13 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
     Ok(())
 }
 
+fn run_disassemble(filepath: impl AsRef<str>) -> Chip8Result<()> {
+    debug!("disassembling: {}", filepath.as_ref());
+    let bytecode = fs::read(filepath.as_ref())?;
+    Disassembler::new(bytecode.as_slice()).print_bytecode();
+    Ok(())
+}
+
 fn dump_bytecode(bytecode: &[u8]) {
     // Instructions are always 2 bytes.
     assert!(bytecode.len() % 2 == 0);
@@ -126,6 +133,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match parse_args() {
         Some(Cmd::Run { filepath }) => run_bytecode(filepath)?,
         Some(Cmd::Asm { filepath }) => run_assembler(filepath)?,
+        Some(Cmd::Dis { filepath }) => run_disassemble(filepath)?,
         None => {
             print_usage();
             // FreeBSD EX_USAGE (64)
@@ -148,7 +156,9 @@ fn parse_args() -> Option<Cmd> {
                 "asm" => Some(Cmd::Asm {
                     filepath: args.next()?,
                 }),
-                "dis" => todo!("disassembling"),
+                "dis" => Some(Cmd::Dis {
+                    filepath: args.next()?,
+                }),
                 _ => None,
             }
         }
@@ -166,4 +176,6 @@ enum Cmd {
     Run { filepath: String },
     /// Assemble
     Asm { filepath: String },
+    /// Disassemble
+    Dis { filepath: String },
 }
