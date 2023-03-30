@@ -65,6 +65,8 @@ impl<'a> Assembler<'a> {
         }
     }
 
+    /// Consume this assembler, as well as the contained lexer, to produce
+    /// a buffer of executable Chip8 bytecode.
     pub fn parse(mut self) -> Chip8Result<Vec<u8>> {
         info!("assembling");
         while let Some(token_kind) = self.stream.peek_kind() {
@@ -366,8 +368,25 @@ impl<'a> Assembler<'a> {
         }
     }
 
+    /// Parse two arguments.
+    ///
+    /// Does not consume the trailing newline.
+    ///
+    /// - Vx,  __
+    /// - I,   __
+    /// - B,   __
+    /// - K,   __
+    /// - F,   __
+    /// - DT,  __
+    /// - ST,  __
+    /// - [I], __
+    /// - __, Vy
+    /// - __, [I]
+    /// - __, .label
+    /// - __, nn
+    /// - __, nnn
     fn parse_arg2(&mut self) -> Chip8Result<[Token; 2]> {
-        let mut dst = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
+        let mut dst = self.stream.next_token().ok_or_else(|| self.eof_error(""))?;
 
         // [I]
         if dst.kind == TokenKind::LeftBracket {

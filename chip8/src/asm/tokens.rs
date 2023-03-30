@@ -110,16 +110,37 @@ impl Span {
 
         (&text[start..end], line_span)
     }
+
+    /// Combine two spans to produce a new span that
+    /// covers both (and everything inbetween).
+    ///
+    /// ```
+    /// use chip8::asm::Span;
+    ///
+    /// let span1 = Span::new(4, 13);
+    /// let span2 = Span::new(21, 13);
+    /// let span3 = span1.merge(&span2);
+    /// assert_eq!(4, span3.index);
+    /// assert_eq!(30, span3.size);
+    /// ```
+    ///
+    /// ```text
+    /// <-- span1 -->    <-- span2 -->
+    /// <---------- span3 ----------->
+    /// ```
+    pub fn merge(&self, other: &Span) -> Span {
+        let index = u32::min(self.index, other.index);
+        let size = u32::max(self.end(), other.end()) - index;
+        Span { index, size }
+    }
 }
 
 impl ops::Add for Span {
     type Output = Span;
 
-    #[allow(clippy::suspicious_arithmetic_impl)]
+    #[allow(clippy::suspicious_arithmetic_impl)] // subtract needed to merge spans
     fn add(self, rhs: Self) -> Self::Output {
-        let index = u32::min(self.index, rhs.index);
-        let size = u32::max(self.end(), rhs.end()) - index;
-        Span { index, size }
+        self.merge(&rhs)
     }
 }
 
