@@ -143,23 +143,15 @@ fn parse_args() -> Option<Cmd> {
             // don't format me T.T
             match cmd.as_str() {
                 "run" => Some(Cmd::Run {
-                    filepath: consume_arg(args)?,
+                    filepath: args.next()?,
                 }),
                 "asm" => Some(Cmd::Asm {
-                    filepath: consume_arg(args)?,
+                    filepath: args.next()?,
                 }),
                 "dis" => todo!("disassembling"),
                 _ => None,
             }
         }
-        None => None,
-    }
-}
-
-/// Consumes the next argument, and prints the usage text if it doesn't exist.
-fn consume_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
-    match args.next() {
-        Some(arg) => Some(arg),
         None => None,
     }
 }
