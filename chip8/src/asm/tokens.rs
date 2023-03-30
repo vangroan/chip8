@@ -308,15 +308,6 @@ pub enum Addr {
     Label(Token),
 }
 
-impl Addr {
-    pub fn token(&self) -> &Token {
-        match self {
-            Self::Num(number) => &number.token,
-            Self::Label(label) => &label,
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

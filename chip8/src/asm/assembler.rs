@@ -168,16 +168,6 @@ impl<'a> Assembler<'a> {
         Ok(T::default())
     }
 
-    /// Wraps a parslet and consumes the returned error.
-    ///
-    /// Returns `None` if an error occurred.
-    fn try_line<T: Default>(&mut self, result: Chip8Result<T>) -> Chip8Result<T> {
-        match result {
-            Err(err) => self.swallow_error(err),
-            Ok(value) => Ok(value),
-        }
-    }
-
     fn next_offset(&self) -> usize {
         self.bytecode.len()
     }
@@ -245,6 +235,7 @@ impl<'a> Assembler<'a> {
         self.bytecode.push(instr);
     }
 
+    #[allow(dead_code)]
     fn dump_bytecode(&self) {
         // Instructions are always 2 bytes.
         assert!(self.bytecode.len() % 2 == 0);

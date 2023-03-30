@@ -26,6 +26,7 @@ pub struct TokenStream<'a> {
     prev: Option<Token>,
 }
 
+#[allow(dead_code)]
 impl<'a> TokenStream<'a> {
     pub fn new(lexer: Lexer<'a>) -> Self {
         Self {
