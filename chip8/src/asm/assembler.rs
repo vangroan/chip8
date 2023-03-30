@@ -68,34 +68,29 @@ impl<'a> Assembler<'a> {
 
     pub fn parse(mut self) -> Chip8Result<Vec<u8>> {
         info!("assembling");
-        loop {
-            match self.stream.peek_kind() {
-                Some(token_kind) => {
-                    match token_kind {
-                        TokenKind::Newline => {
-                            /* Skip empty line */
-                            self.stream.consume(TokenKind::Newline)?;
-                            continue;
-                        }
-                        TokenKind::Dot => self.parse_label()?,
-                        TokenKind::Number => self.parse_data_block()?,
-                        TokenKind::Keyword(_) => self
-                            .parse_mnemonic()
-                            .or_else(|err| self.swallow_error(err))?,
-                        TokenKind::Unknown => {
-                            let token = self.stream.next_token().unwrap();
-                            let message = format!("unknown token {:?}", token.kind);
-                            return Err(self.error(token, message));
-                        }
-                        TokenKind::EOF => break,
-                        _ => {
-                            let token = self.stream.next_token().unwrap();
-                            let message = format!("expected opcode, found {:?}", token.kind);
-                            return Err(self.error(token, message));
-                        }
-                    }
+        while let Some(token_kind) = self.stream.peek_kind() {
+            match token_kind {
+                TokenKind::Newline => {
+                    /* Skip empty line */
+                    self.stream.consume(TokenKind::Newline)?;
+                    continue;
                 }
-                None => break,
+                TokenKind::Dot => self.parse_label()?,
+                TokenKind::Number => self.parse_data_block()?,
+                TokenKind::Keyword(_) => self
+                    .parse_mnemonic()
+                    .or_else(|err| self.swallow_error(err))?,
+                TokenKind::Unknown => {
+                    let token = self.stream.next_token().unwrap();
+                    let message = format!("unknown token {:?}", token.kind);
+                    return Err(self.error(token, message));
+                }
+                TokenKind::EOF => break,
+                _ => {
+                    let token = self.stream.next_token().unwrap();
+                    let message = format!("expected opcode, found {:?}", token.kind);
+                    return Err(self.error(token, message));
+                }
             }
         }
 
@@ -113,7 +108,7 @@ impl<'a> Assembler<'a> {
     #[inline(never)]
     #[cold]
     fn error(&self, token: Token, message: impl ToString) -> Chip8Error {
-        AsmError::new(self.stream.source_code(), token.span.clone(), message).into()
+        AsmError::new(self.stream.source_code(), token.span, message).into()
     }
 
     /// Build an end-of-file error that points to the end of the previous token.
@@ -134,7 +129,7 @@ impl<'a> Assembler<'a> {
 
     /// Indicated whether any lines have enountered an error.
     fn has_errors(&self) -> bool {
-        self.errors.len() > 0
+        !self.errors.is_empty()
     }
 
     /// Gobble up the served error and store it in our error belly. Yum, yum.
@@ -504,13 +499,13 @@ impl<'a> Assembler<'a> {
             match bytes.get(1) {
                 Some(b'b') => (NF::Bin, u16::from_str_radix(slice_number(fragment), 2)),
                 Some(b'x') => (NF::Hex, u16::from_str_radix(slice_number(fragment), 16)),
-                _ => (NF::Dec, u16::from_str_radix(fragment, 10)),
+                _ => (NF::Dec, fragment.parse::<u16>()),
             }
         } else {
-            (NF::Dec, u16::from_str_radix(fragment, 10))
+            (NF::Dec, fragment.parse::<u16>())
         };
 
-        let value = parse_result.map_err(|err| Chip8Error::NumberParse(err))?;
+        let value = parse_result.map_err(Chip8Error::NumberParse)?;
 
         Ok(Number {
             token,
@@ -544,20 +539,15 @@ impl<'a> Assembler<'a> {
         let mut count = 0;
         let mut last_token: Option<Token> = None;
 
-        loop {
-            match self.stream.peek_kind() {
-                Some(TokenKind::Number) => {
-                    let token = self.stream.consume(TokenKind::Number)?;
-                    let nn = self.parse_number(token)?;
-                    if nn.value > u8::MAX as u16 {
-                        panic!("only 8-bit literals are currently supported");
-                    }
-                    self.emit(nn.value as u8);
-                    last_token = Some(nn.token);
-                    count += 1;
-                }
-                _ => break,
+        while let Some(TokenKind::Number) = self.stream.peek_kind() {
+            let token = self.stream.consume(TokenKind::Number)?;
+            let nn = self.parse_number(token)?;
+            if nn.value > u8::MAX as u16 {
+                panic!("only 8-bit literals are currently supported");
             }
+            self.emit(nn.value as u8);
+            last_token = Some(nn.token);
+            count += 1;
 
             // Discard optional newline so we can continue consuming data
             // split accross multiple lines.
@@ -675,10 +665,9 @@ impl<'a> Assembler<'a> {
         match nnn {
             Addr::Num(number) => {
                 if number.value > 0xFFF {
-                    return Err(self.error(
-                        number.token.clone(),
-                        "argument for jump address must be 12-bits",
-                    ));
+                    return Err(
+                        self.error(number.token, "argument for jump address must be 12-bits")
+                    );
                 }
                 self.emit2(encode_nnn(opcode, number.value));
             }
@@ -704,10 +693,9 @@ impl<'a> Assembler<'a> {
         match nnn {
             Addr::Num(number) => {
                 if number.value > 0xFFF {
-                    return Err(self.error(
-                        number.token.clone(),
-                        "argument for call address must be 12-bits",
-                    ));
+                    return Err(
+                        self.error(number.token, "argument for call address must be 12-bits")
+                    );
                 }
                 self.emit2(encode_nnn(CALL_ADDR, number.value));
             }
@@ -876,7 +864,7 @@ impl<'a> Assembler<'a> {
             // Load memory address into index register.
             [TK::Keyword(KW::Index), TK::Label] => {
                 // NOTE: If label is not defined yet, we default to 0x000
-                let nnn = (self.resolve_label(src).unwrap_or_default() & 0xFFF) as u16;
+                let nnn = self.resolve_label(src).unwrap_or_default() & 0xFFF;
                 self.emit2(encode_nnn(LD_I_NNN, nnn));
             }
             // Fx07 (LD Vx,  DT)
@@ -1106,7 +1094,7 @@ impl<'a> Assembler<'a> {
 fn slice_number(fragment: &str) -> &str {
     let rest = &fragment[2..];
     trace!("slice_number: fragment {fragment} rest {rest}");
-    if rest == "" {
+    if rest.is_empty() {
         "0"
     } else {
         rest

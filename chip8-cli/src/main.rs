@@ -75,7 +75,7 @@ fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
         match asm.parse() {
             Ok(bytecode) => {
                 let mut outfile = fs::File::create("output.rom")?;
-                outfile.write(&bytecode)?;
+                outfile.write_all(&bytecode)?;
                 dump_bytecode(&bytecode)
             }
             Err(err) => {

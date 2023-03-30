@@ -44,7 +44,7 @@ impl Display for Chip8Error {
                 for (index, err) in errors.iter().enumerate() {
                     write!(f, "{}", err)?;
                     if index < count {
-                        write!(f, "\n")?;
+                        writeln!(f)?;
                     }
                 }
                 Ok(())

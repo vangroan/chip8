@@ -115,6 +115,7 @@ impl Span {
 impl ops::Add for Span {
     type Output = Span;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn add(self, rhs: Self) -> Self::Output {
         let index = u32::min(self.index, rhs.index);
         let size = u32::max(self.end(), rhs.end()) - index;
