@@ -5,8 +5,23 @@ use chip8::{
     asm::{Assembler, Lexer, TokenKind},
     constants::*,
     prelude::*,
+    IMPL_VERSION,
 };
 use log::{error, info};
+
+static USAGE: &str = r#"
+usage: chip8 CMD [FILE]
+
+commands:
+    run     Run the target ROM file
+    asm     Compile the target assembly file into a ROM
+    dis     Disassemble the the target ROM into readable assembly
+
+examples:
+    chip8 run breakout.rom
+    chip8 asm breakout.asm
+    chip8 dis breakout.rom
+"#;
 
 fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
     println!("Running Bytecode Interpreter");
@@ -107,7 +122,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     match parse_args() {
         Some(Cmd::Run { filepath }) => run_bytecode(filepath)?,
         Some(Cmd::Asm { filepath }) => run_assembler(filepath)?,
-        None => {}
+        None => {
+            print_usage();
+            // FreeBSD EX_USAGE (64)
+            std::process::exit(64)
+        }
     }
 
     Ok(())
@@ -125,11 +144,8 @@ fn parse_args() -> Option<Cmd> {
                 "asm" => Some(Cmd::Asm {
                     filepath: consume_arg(args)?,
                 }),
-                _ => {
-                    println!("unknown");
-                    print_usage();
-                    None
-                }
+                "dis" => todo!("disassembling"),
+                _ => None,
             }
         }
         None => {
@@ -151,7 +167,8 @@ fn consume_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
 }
 
 fn print_usage() {
-    println!("Usage...");
+    println!("Chip8 v{IMPL_VERSION}");
+    println!("{USAGE}");
 }
 
 enum Cmd {
