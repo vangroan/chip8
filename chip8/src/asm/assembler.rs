@@ -599,24 +599,24 @@ impl<'a> Assembler<'a> {
         if let TokenKind::Keyword(keyword) = name.kind {
             match keyword {
                 KW::Add    => self.parse_add(name)?,
-                KW::And    => self.parse_arithmetic(AND_VX_VY)?,
+                KW::And    => self.parse_arithmetic_and(name)?,
                 KW::Call   => self.parse_call(name)?,
                 KW::Clear  => self.parse_clear_screen(name)?,
                 KW::Draw   => self.parse_draw(name)?,
                 KW::Jump   => self.parse_jump(name)?,
                 KW::Load   => self.parse_load(name)?,
-                KW::Or     => self.parse_arithmetic(OR_VX_VY)?,
+                KW::Or     => self.parse_arithmetic_or(name)?,
                 KW::Random => self.parse_random(name)?,
                 KW::Return => self.parse_return(name)?,
                 KW::SkipEq => self.parse_skip_eq(name)?,
                 KW::SkipEqNot  => self.parse_skip_neq(name)?,
                 KW::SkipKey    => self.parse_skip_key(name, true)?,
                 KW::SkipKeyNot => self.parse_skip_key(name, false)?,
-                KW::ShiftLeft  => self.parse_arithmetic(SHL_VX_VY)?,
-                KW::ShiftRight => self.parse_arithmetic(SHR_VX_VY)?,
-                KW::Sub    => self.parse_arithmetic(SUB_VX_VY)?,
-                KW::SubN   => self.parse_arithmetic(SUBN_VX_VY)?,
-                KW::Xor    => self.parse_arithmetic(XOR_VX_VY)?,
+                KW::ShiftLeft  => self.parse_arithmetic_shl(name)?,
+                KW::ShiftRight => self.parse_arithmetic_shr(name)?,
+                KW::Sub    => self.parse_arithmetic_sub(name)?,
+                KW::SubN   => self.parse_arithmetic_subn(name)?,
+                KW::Xor    => self.parse_arithmetic_xor(name)?,
                 _ => {
                     let fragment = self.stream.span_fragment(&name.span);
                     return Err(self.error(name, format!("unsupported opcode {:?}", fragment)));
@@ -627,6 +627,7 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
+    /// 00E0 (CLS)
     fn parse_clear_screen(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_clear_screen");
         debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Clear));
@@ -634,6 +635,7 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
+    /// 00EE (RET)
     fn parse_return(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_return");
         debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Return));
@@ -701,7 +703,7 @@ impl<'a> Assembler<'a> {
 
     /// Parse Call
     ///
-    /// 2NNN (CALL addr)
+    /// 2nnn (CALL addr)
     fn parse_call(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_call");
         debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Call));
@@ -729,7 +731,7 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    /// 3XNN (SE Vx, byte)
+    /// 3xnn (SE Vx, byte)
     /// 5xy0 (SE Vx, Vy)
     fn parse_skip_eq(&mut self, name: Token) -> Chip8Result<()> {
         use TokenKind as TK;
@@ -769,7 +771,7 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
-    /// 4xNN (SNE Vx, byte)
+    /// 4xnn (SNE Vx, byte)
     /// 9xy0 (SNE Vx, Vy)
     fn parse_skip_neq(&mut self, name: Token) -> Chip8Result<()> {
         use TokenKind as TK;
@@ -833,9 +835,9 @@ impl<'a> Assembler<'a> {
 
     /// Load
     ///
-    /// - 6XNN (LD Vx,  byte)
+    /// - 6xnn (LD Vx,  byte)
     /// - 8xy0 (LD Vx, byte)
-    /// - ANNN (LD I,   addr)
+    /// - Annn (LD I,   addr)
     /// - Fx07 (LD Vx,  DT)
     /// - Fx0A (LD Vx,  K)
     /// - Fx15 (LD DT,  Vx)
@@ -878,7 +880,7 @@ impl<'a> Assembler<'a> {
                 let nnn = self.parse_number(src)?;
                 self.emit2(encode_nnn(LD_I_NNN, nnn.value));
             }
-            // ANNN (LD I, label)
+            // Annn (LD I, label)
             //
             // Load memory address into index register.
             [TK::Keyword(KW::Index), TK::Label] => {
@@ -1039,6 +1041,56 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
+    /// 8xy1 (OR Vx, Vy)
+    fn parse_arithmetic_or(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_arithmetic_or");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Or));
+        self.parse_arithmetic(OR_VX_VY)
+    }
+
+    /// 8xy2 (AND Vx, Vy)
+    fn parse_arithmetic_and(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_arithmetic_and");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::And));
+        self.parse_arithmetic(AND_VX_VY)
+    }
+
+    /// 8xy3 (XOR Vx, Vy)
+    fn parse_arithmetic_xor(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_arithmetic_xor");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Xor));
+        self.parse_arithmetic(XOR_VX_VY)
+    }
+
+    /// 8xy5 (SUB Vx, Vy)
+    fn parse_arithmetic_sub(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_arithmetic_sub");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Sub));
+        self.parse_arithmetic(SUB_VX_VY)
+    }
+
+    /// 8xy6 (SHR Vx {, Vy})
+    fn parse_arithmetic_shr(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_arithmetic_shr");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::ShiftRight));
+        self.parse_arithmetic(SHR_VX_VY)
+    }
+
+    /// 8xy7 (SUBN Vx, Vy)
+    fn parse_arithmetic_subn(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_arithmetic_subn");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::SubN));
+        self.parse_arithmetic(SUBN_VX_VY)
+    }
+
+    /// 8xyE (SHL Vx {, Vy})
+    fn parse_arithmetic_shl(&mut self, name: Token) -> Chip8Result<()> {
+        trace!("parse_arithmetic_shl");
+        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::ShiftLeft));
+        self.parse_arithmetic(SHL_VX_VY)
+    }
+
+    /// Cxnn (RND Vx, byte)
     fn parse_random(&mut self, _name: Token) -> Chip8Result<()> {
         trace!("parse_random");
         let (vx, nn) = self.parse_xnn()?;
@@ -1047,6 +1099,7 @@ impl<'a> Assembler<'a> {
         Ok(())
     }
 
+    /// Dxyn (DRW Vx, Vy, byte)
     fn parse_draw(&mut self, _name: Token) -> Chip8Result<()> {
         trace!("parse_draw");
         let (vx, vy, n) = self.parse_xyn()?;
@@ -1073,7 +1126,6 @@ fn slice_number(fragment: &str) -> &str {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bytecode::{opcodes::*, *};
 
     #[rustfmt::skip]
     const CASES: &[(u16, &str)] = &[
