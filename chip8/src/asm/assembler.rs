@@ -54,6 +54,12 @@ struct LabelAccess {
     offset: usize,
 }
 
+macro_rules! debug_assert_match {
+    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?) => {
+        debug_assert!(matches!($expression, $( $pattern )|+ $( if $guard )?))
+    };
+}
+
 impl<'a> Assembler<'a> {
     pub fn new(lexer: Lexer<'a>) -> Self {
         Self {
@@ -504,7 +510,7 @@ impl<'a> Assembler<'a> {
         use NumFormat as NF;
 
         trace!("parse_number");
-        debug_assert_eq!(token.kind, TokenKind::Number);
+        debug_assert_match!(token.kind, TokenKind::Number);
 
         let fragment = self.stream.span_fragment(&token.span);
         trace!("fragment {fragment}");
@@ -534,7 +540,7 @@ impl<'a> Assembler<'a> {
 
     fn parse_label(&mut self) -> Chip8Result<()> {
         trace!("parse_label");
-        debug_assert!(matches!(self.stream.peek_kind(), Some(TokenKind::Dot)));
+        debug_assert_match!(self.stream.peek_kind(), Some(TokenKind::Dot));
 
         let _dot = self.stream.consume(TokenKind::Dot)?;
         let name = self.stream.consume(TokenKind::Ident)?;
@@ -591,7 +597,7 @@ impl<'a> Assembler<'a> {
         use Keyword as KW;
 
         trace!("parse mnemonic");
-        debug_assert!(matches!(self.stream.peek_kind(), Some(TokenKind::Keyword(_))));
+        debug_assert_match!(self.stream.peek_kind(), Some(TokenKind::Keyword(_)));
 
         let name = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
 
@@ -739,7 +745,7 @@ impl<'a> Assembler<'a> {
         use TokenKind as TK;
 
         trace!("parse_skip_eq");
-        debug_assert!(matches!(name.kind, TK::Keyword(KW::SkipEq | KW::SkipEqNot)));
+        debug_assert_match!(name.kind, TK::Keyword(KW::SkipEq | KW::SkipEqNot));
 
         let [lhs, rhs] = self.parse_arg2()?;
         let signature = [lhs.kind, rhs.kind];
@@ -789,11 +795,11 @@ impl<'a> Assembler<'a> {
     /// - Ex9E (SKP Vx)
     /// - ExA1 (SKNP Vx)
     fn parse_skip_key(&mut self, name: Token, cmp: Cmp) -> Chip8Result<()> {
+        use Keyword as KW;
+        use TokenKind as TK;
+
         trace!("parse_skip_key");
-        debug_assert!(matches!(
-            name.kind,
-            TokenKind::Keyword(Keyword::SkipKey | Keyword::SkipKeyNot)
-        ));
+        debug_assert_match!(name.kind, TK::Keyword(KW::SkipKey | KW::SkipKeyNot));
 
         let arg = self
             .stream
