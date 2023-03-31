@@ -1,4 +1,6 @@
 //! Lexical analysis
+use crate::asm::tokens::VReg;
+
 use super::{
     cursor::{Cursor, EOF_CHAR},
     tokens::{Keyword, Span, Token, TokenKind},
@@ -172,10 +174,13 @@ impl<'a> Lexer<'a> {
             self.cursor.next();
         }
 
-        // Attempt to convert identifier to keyword.
+        // Attempt to convert identifier to keyword, or a register.
         let token_kind = match Keyword::parse(self.fragment()) {
             Some(keyword) => TokenKind::Keyword(keyword),
-            None => TokenKind::Ident,
+            None => match VReg::parse(self.fragment()) {
+                Some(vregister) => TokenKind::Register(vregister),
+                None => TokenKind::Ident,
+            },
         };
 
         self.make_token(token_kind)

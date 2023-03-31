@@ -2,6 +2,7 @@
 use log::{debug, info, trace};
 
 use crate::{
+    asm::tokens::VReg,
     bytecode::{opcodes::*, *},
     constants::*,
     error::{AsmError, Chip8Error, Chip8Result},
@@ -10,7 +11,7 @@ use crate::{
 use super::{
     lexer::Lexer,
     token_stream::TokenStream,
-    tokens::{Addr, Cmp, Keyword, NumFormat, Number, Span, Token, TokenKind},
+    tokens::{Addr, Cmp, Keyword as KW, NumFormat, Number, Span, Token, TokenKind as TK},
 };
 
 /// Chip-8 assembler.
@@ -77,22 +78,22 @@ impl<'a> Assembler<'a> {
         info!("assembling");
         while let Some(token_kind) = self.stream.peek_kind() {
             match token_kind {
-                TokenKind::Newline => {
+                TK::Newline => {
                     /* Skip empty line */
-                    self.stream.consume(TokenKind::Newline)?;
+                    self.stream.consume(TK::Newline)?;
                     continue;
                 }
-                TokenKind::Dot => self.parse_label()?,
-                TokenKind::Number => self.parse_data_block()?,
-                TokenKind::Keyword(_) => self
+                TK::Dot => self.parse_label()?,
+                TK::Number => self.parse_data_block()?,
+                TK::Keyword(_) => self
                     .parse_mnemonic()
                     .or_else(|err| self.swallow_error(err))?,
-                TokenKind::Unknown => {
+                TK::Unknown => {
                     let token = self.stream.next_token().unwrap();
                     let message = format!("unknown token {:?}", token.kind);
                     return Err(self.error(token, message));
                 }
-                TokenKind::EOF => break,
+                TK::EOF => break,
                 _ => {
                     let token = self.stream.next_token().unwrap();
                     let message = format!("expected opcode, found {:?}", token.kind);
@@ -141,8 +142,6 @@ impl<'a> Assembler<'a> {
 
     /// Gobble up the served error and store it in our error belly. Yum, yum.
     fn swallow_error<T: Default>(&mut self, err: Chip8Error) -> Chip8Result<T> {
-        use TokenKind as TK;
-
         // Collect error so it can be returned as a compound error later.
         self.errors.push(err);
 
@@ -152,7 +151,7 @@ impl<'a> Assembler<'a> {
             // In the case where the error was on the newline,
             // we want to stop consuming immediately.
             // Otherwise we are consuming and discarding the next line.
-            if self.stream.previous_token().map(|t| t.kind) == Some(TokenKind::Newline) {
+            if self.stream.previous_token().map(|t| t.kind) == Some(TK::Newline) {
                 break;
             }
 
@@ -177,7 +176,7 @@ impl<'a> Assembler<'a> {
     fn push_label(&mut self, name: &Token) {
         debug_assert_eq!(
             name.kind,
-            TokenKind::Ident,
+            TK::Ident,
             "only identifiers may be used as label names"
         );
 
@@ -203,7 +202,7 @@ impl<'a> Assembler<'a> {
     fn resolve_label(&mut self, label: Token) -> Option<u16> {
         debug_assert_eq!(
             label.kind,
-            TokenKind::Label,
+            TK::Label,
             "label must be resolved with a label token"
         );
 
@@ -270,7 +269,7 @@ impl<'a> Assembler<'a> {
         let deferred_access: Vec<_> = self.defer.drain(..).collect();
 
         for access in deferred_access {
-            debug_assert_eq!(access.token.kind, TokenKind::Label);
+            debug_assert_eq!(access.token.kind, TK::Label);
 
             let name = self.stream.span_fragment(&access.token.span);
             let nnn = self.lookup_label(name).ok_or_else(|| {
@@ -305,7 +304,8 @@ impl<'a> Assembler<'a> {
 }
 
 impl<'a> Assembler<'a> {
-    const STATEMENT_END: &[TokenKind] = &[TokenKind::EOF, TokenKind::Newline];
+    /// Tokens that mark the end of a statement.
+    const STATEMENT_END: &[TK] = &[TK::EOF, TK::Newline];
 
     /// Consume an end-of-statement.
     fn consume_eos(&mut self) -> Chip8Result<()> {
@@ -348,18 +348,18 @@ impl<'a> Assembler<'a> {
             .ok_or_else(|| self.eof_error("an address as either a number literal or label"))?;
 
         match token.kind {
-            TokenKind::Number => {
+            TK::Number => {
                 let number = self.parse_number(token)?;
 
                 Ok(Addr::Num(number))
             }
-            TokenKind::Dot => {
-                let ident = self.stream.consume(TokenKind::Ident)?;
+            TK::Dot => {
+                let ident = self.stream.consume(TK::Ident)?;
 
                 // Transform the identifier into a label for ease of use.
                 // Technically the grammar is now no longer context-free.
                 let label = Token {
-                    kind: TokenKind::Label,
+                    kind: TK::Label,
                     // FIXME: merging spans breaks label lookup later.
                     // span: nnn.span + ident.span,
                     span: ident.span,
@@ -395,28 +395,28 @@ impl<'a> Assembler<'a> {
         let mut dst = self.stream.next_token().ok_or_else(|| self.eof_error(""))?;
 
         // [I]
-        if dst.kind == TokenKind::LeftBracket {
-            let index_token = self.stream.consume(TokenKind::Keyword(Keyword::Index))?;
-            let right_bracket = self.stream.consume(TokenKind::RightBracket)?;
+        if dst.kind == TK::LeftBracket {
+            let index_token = self.stream.consume(TK::Keyword(KW::Index))?;
+            let right_bracket = self.stream.consume(TK::RightBracket)?;
             dst = Token {
-                kind: TokenKind::Keyword(Keyword::Array),
+                kind: TK::Keyword(KW::Array),
                 span: dst.span + index_token.span + right_bracket.span,
             };
         }
 
-        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let _comma = self.stream.consume(TK::Comma)?;
         let src = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
 
         match src.kind {
-            TokenKind::Number | TokenKind::Keyword(_) => Ok([dst, src]),
+            TK::Number | TK::Keyword(_) | TK::Register(_) => Ok([dst, src]),
             // Label
-            TokenKind::Dot => {
-                let ident = self.stream.consume(TokenKind::Ident)?;
+            TK::Dot => {
+                let ident = self.stream.consume(TK::Ident)?;
 
                 // Transform the identifier into a label for ease of use.
                 // Technically the grammar is now no longer context-free.
                 let nnn = Token {
-                    kind: TokenKind::Label,
+                    kind: TK::Label,
                     // FIXME: merging spans breaks label lookup later.
                     // span: nnn.span + ident.span,
                     span: ident.span,
@@ -425,11 +425,11 @@ impl<'a> Assembler<'a> {
                 Ok([dst, nnn])
             }
             // [I]
-            TokenKind::LeftBracket => {
-                let index_token = self.stream.consume(TokenKind::Keyword(Keyword::Index))?;
-                let right_bracket = self.stream.consume(TokenKind::RightBracket)?;
+            TK::LeftBracket => {
+                let index_token = self.stream.consume(TK::Keyword(KW::Index))?;
+                let right_bracket = self.stream.consume(TK::RightBracket)?;
                 let array = Token {
-                    kind: TokenKind::Keyword(Keyword::Array),
+                    kind: TK::Keyword(KW::Array),
                     span: src.span + index_token.span + right_bracket.span,
                 };
                 Ok([dst, array])
@@ -448,10 +448,10 @@ impl<'a> Assembler<'a> {
             .next_token()
             .ok_or_else(|| Chip8Error::EOF)
             .and_then(|t| self.parse_vregister(t))?;
-        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let _comma = self.stream.consume(TK::Comma)?;
         let nn = self
             .stream
-            .consume(TokenKind::Number)
+            .consume(TK::Number)
             .and_then(|t| self.parse_number(t))?;
 
         Ok((vx, nn))
@@ -463,38 +463,25 @@ impl<'a> Assembler<'a> {
             .next_token()
             .ok_or_else(|| Chip8Error::EOF)
             .and_then(|t| self.parse_vregister(t))?;
-        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let _comma = self.stream.consume(TK::Comma)?;
         let vy = self
             .stream
             .next_token()
             .ok_or_else(|| Chip8Error::EOF)
             .and_then(|t| self.parse_vregister(t))?;
-        let _comma = self.stream.consume(TokenKind::Comma)?;
+        let _comma = self.stream.consume(TK::Comma)?;
         let n = self
             .stream
-            .consume(TokenKind::Number)
+            .consume(TK::Number)
             .and_then(|t| self.parse_number(t))?;
 
         Ok((vx, vy, n))
     }
 
+    /// Parse a general purpose register, V0-VF
     fn parse_vregister(&self, token: Token) -> Chip8Result<u8> {
-        use TokenKind as TK;
-
         match token.kind {
-            TK::Keyword(keyword) => {
-                // don't format me
-                match keyword.as_vregister() {
-                    Some(vregister) => Ok(vregister),
-                    None => {
-                        let message = format!(
-                            "expected one of the V0-VF registers, but found {:?}",
-                            token.kind
-                        );
-                        Err(self.error(token, message))
-                    }
-                }
-            }
+            TK::Register(vreg) => Ok(vreg.as_index()),
             TK::EOF => Err(self.eof_error("one of the V0-VF registers")),
             _ => {
                 let message = format!(
@@ -510,7 +497,7 @@ impl<'a> Assembler<'a> {
         use NumFormat as NF;
 
         trace!("parse_number");
-        debug_assert_match!(token.kind, TokenKind::Number);
+        debug_assert_match!(token.kind, TK::Number);
 
         let fragment = self.stream.span_fragment(&token.span);
         trace!("fragment {fragment}");
@@ -540,11 +527,11 @@ impl<'a> Assembler<'a> {
 
     fn parse_label(&mut self) -> Chip8Result<()> {
         trace!("parse_label");
-        debug_assert_match!(self.stream.peek_kind(), Some(TokenKind::Dot));
+        debug_assert_match!(self.stream.peek_kind(), Some(TK::Dot));
 
-        let _dot = self.stream.consume(TokenKind::Dot)?;
-        let name = self.stream.consume(TokenKind::Ident)?;
-        if name.kind != TokenKind::Ident {
+        let _dot = self.stream.consume(TK::Dot)?;
+        let name = self.stream.consume(TK::Ident)?;
+        if name.kind != TK::Ident {
             return Err(self.error(name, "expected label name"));
         }
 
@@ -563,8 +550,8 @@ impl<'a> Assembler<'a> {
         let mut count = 0;
         let mut last_token: Option<Token> = None;
 
-        while let Some(TokenKind::Number) = self.stream.peek_kind() {
-            let token = self.stream.consume(TokenKind::Number)?;
+        while let Some(TK::Number) = self.stream.peek_kind() {
+            let token = self.stream.consume(TK::Number)?;
             let nn = self.parse_number(token)?;
             if nn.value > u8::MAX as u16 {
                 panic!("only 8-bit literals are currently supported");
@@ -575,7 +562,7 @@ impl<'a> Assembler<'a> {
 
             // Discard optional newline so we can continue consuming data
             // split accross multiple lines.
-            let _newline = self.stream.consume(TokenKind::Newline);
+            let _newline = self.stream.consume(TK::Newline);
         }
 
         trace!("data count: {count}");
@@ -594,14 +581,12 @@ impl<'a> Assembler<'a> {
 
     #[rustfmt::skip]
     fn parse_mnemonic(&mut self) -> Chip8Result<()> {
-        use Keyword as KW;
-
         trace!("parse mnemonic");
-        debug_assert_match!(self.stream.peek_kind(), Some(TokenKind::Keyword(_)));
+        debug_assert_match!(self.stream.peek_kind(), Some(TK::Keyword(_)));
 
         let name = self.stream.next_token().ok_or_else(|| Chip8Error::EOF)?;
 
-        if let TokenKind::Keyword(keyword) = name.kind {
+        if let TK::Keyword(keyword) = name.kind {
             match keyword {
                 KW::Add    => self.parse_add(name)?,
                 KW::And    => self.parse_arithmetic_and(name)?,
@@ -635,7 +620,7 @@ impl<'a> Assembler<'a> {
     /// 00E0 (CLS)
     fn parse_clear_screen(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_clear_screen");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Clear));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Clear));
         self.emit2(encode_bare(CLS));
         Ok(())
     }
@@ -643,7 +628,7 @@ impl<'a> Assembler<'a> {
     /// 00EE (RET)
     fn parse_return(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_return");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Return));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Return));
         self.emit2(encode_bare(RET));
         Ok(())
     }
@@ -654,7 +639,7 @@ impl<'a> Assembler<'a> {
     /// Bnnn (JP V0, addr)
     fn parse_jump(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_jump");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Jump));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Jump));
 
         // Jump can optionally take the V0 register as an offset.
         let opcode: u8 = {
@@ -663,22 +648,17 @@ impl<'a> Assembler<'a> {
                 .peek_kind()
                 .ok_or_else(|| self.eof_error("register, number literal or label"))?
             {
-                TokenKind::Keyword(keyword) if keyword.is_vregister() => {
-                    match keyword {
-                        Keyword::V0 => {
-                            let _v0 = self.stream.consume(TokenKind::Keyword(Keyword::V0))?;
-                            let _comma = self.stream.consume(TokenKind::Comma)?;
-                            JP_V0_ADDR
-                        }
-                        other => {
-                            // V1-VF
-                            let token = self.stream.next_token().unwrap();
-                            let message = format!(
-                                "only register V0 is supported as a jump offset, not {other:?}"
-                            );
-                            return Err(self.error(token, message));
-                        }
-                    }
+                TK::Register(VReg::V0) => {
+                    let _v0 = self.stream.consume(TK::Register(VReg::V0))?;
+                    let _comma = self.stream.consume(TK::Comma)?;
+                    JP_V0_ADDR
+                }
+                TK::Register(other) => {
+                    // V1-VF
+                    let token = self.stream.next_token().unwrap();
+                    let message =
+                        format!("only register v0 is supported as a jump offset, not {other}");
+                    return Err(self.error(token, message));
                 }
                 _ => JP_ADDR,
             }
@@ -710,7 +690,7 @@ impl<'a> Assembler<'a> {
     /// 2nnn (CALL addr)
     fn parse_call(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_call");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Call));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Call));
 
         let nnn = self.parse_nnn()?;
 
@@ -741,9 +721,6 @@ impl<'a> Assembler<'a> {
     /// - 5xy0 (SE Vx, Vy)
     /// - 9xy0 (SNE Vx, Vy)
     fn parse_skip(&mut self, name: Token, cmp: Cmp) -> Chip8Result<()> {
-        use Keyword as KW;
-        use TokenKind as TK;
-
         trace!("parse_skip_eq");
         debug_assert_match!(name.kind, TK::Keyword(KW::SkipEq | KW::SkipEqNot));
 
@@ -752,8 +729,8 @@ impl<'a> Assembler<'a> {
         match signature {
             // 3xnn (SE Vx, byte)
             // 4xnn (SNE Vx, byte)
-            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
-                let vx = self.parse_vregister(lhs)?;
+            [TK::Register(vx), TK::Number] => {
+                let vx = vx.as_index();
                 let nn = self.parse_number(rhs)?;
                 let opcode = match cmp {
                     Cmp::Eq => SE_VX_NN,
@@ -763,20 +740,25 @@ impl<'a> Assembler<'a> {
             }
             // 5xy0 (SE Vx, Vy)
             // 9xy0 (SNE Vx, Vy)
-            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
-                let vx = self.parse_vregister(lhs)?;
-                let vy = self.parse_vregister(rhs)?;
+            [TK::Register(vx), TK::Register(vy)] => {
+                let vx = vx.as_index();
+                let vy = vy.as_index();
                 let opcode = match cmp {
                     Cmp::Eq => SE_VX_VY,
                     Cmp::NotEq => SNE_VX_VY,
                 };
                 self.emit2(encode_xyn(opcode, vx, vy, 0));
             }
-            [TK::Keyword(kw), _] if kw.is_vregister() => {
-                let kind = rhs.kind;
+            [TK::Register(vx), _] => {
                 return Err(self.error(
                     rhs,
-                    format!("expected register or number literal, but found {kind:?}"),
+                    format!("expected register or number literal, but found {vx}"),
+                ));
+            }
+            [TK::Keyword(keyword), _] => {
+                return Err(self.error(
+                    rhs,
+                    format!("expected register or number literal, but found {keyword}"),
                 ));
             }
             _ => {
@@ -795,9 +777,6 @@ impl<'a> Assembler<'a> {
     /// - Ex9E (SKP Vx)
     /// - ExA1 (SKNP Vx)
     fn parse_skip_key(&mut self, name: Token, cmp: Cmp) -> Chip8Result<()> {
-        use Keyword as KW;
-        use TokenKind as TK;
-
         trace!("parse_skip_key");
         debug_assert_match!(name.kind, TK::Keyword(KW::SkipKey | KW::SkipKeyNot));
 
@@ -829,9 +808,6 @@ impl<'a> Assembler<'a> {
     /// - Fx55 (LD [I], Vx)
     /// - Fx65 (LD Vx,  [I])
     fn parse_load(&mut self, name: Token) -> Chip8Result<()> {
-        use Keyword as KW;
-        use TokenKind as TK;
-
         trace!("parse_load");
         debug_assert_eq!(name.kind, TK::Keyword(KW::Load));
 
@@ -844,15 +820,15 @@ impl<'a> Assembler<'a> {
             // 6xnn (LD Vx, byte)
             //
             // Load byte literal into Vx register
-            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Register(vx), TK::Number] => {
+                let vx = vx.as_index();
                 let nn = self.parse_number(src)?;
                 self.emit2(encode_xnn(LD_VX_NN, vx, nn.as_u8()))
             }
             // 8xy0 (LD Vx, byte)
-            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
-                let vx = kw1.as_vregister().unwrap_or_else(|| unreachable!());
-                let vy = kw2.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Register(vx), TK::Register(vy)] => {
+                let vx = vx.as_index();
+                let vy = vy.as_index();
                 self.emit2(encode_xyn(LD_VX_VY[0], vx, vy, LD_VX_VY[1]));
             }
             // Annn (LD I, addr)
@@ -873,68 +849,66 @@ impl<'a> Assembler<'a> {
             // Fx07 (LD Vx,  DT)
             //
             // Load delay timer into Vx register
-            [TK::Keyword(kw), TK::Keyword(KW::Delay)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Register(vx), TK::Keyword(KW::Delay)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_VX_DT[0], vx, LD_VX_DT[1]));
             }
             // Fx0A (LD Vx, K)
             //
             // Wait for a key press, store the value of the key in Vx.
-            [TK::Keyword(kw), TK::Keyword(KW::Key)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Register(vx), TK::Keyword(KW::Key)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_VX_K[0], vx, LD_VX_K[1]));
             }
             // Fx15 (LD DT, Vx)
             //
             // Set delay timer = Vx
-            [TK::Keyword(KW::Delay), TK::Keyword(kw)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Keyword(KW::Delay), TK::Register(vx)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_DT_VX[0], vx, LD_DT_VX[1]));
             }
             // Fx18 (LD ST, Vx)
             //
             // Set sound timer = Vx
-            [TK::Keyword(KW::Sound), TK::Keyword(kw)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Keyword(KW::Sound), TK::Register(vx)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_ST_VX[0], vx, LD_ST_VX[1]));
             }
             // Fx29 (LD F, Vx)
             //
             // Set I = location of sprite for digit Vx
-            [TK::Keyword(KW::Char), TK::Keyword(kw)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Keyword(KW::Char), TK::Register(vx)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_F_VX[0], vx, LD_F_VX[1]));
             }
             // Fx33 (LD BCD, Vx)
             //
             // Store BCD representation of Vx in memory locations I, I+1, and I+2
-            [TK::Keyword(KW::Decimal), TK::Keyword(kw)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Keyword(KW::Decimal), TK::Register(vx)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_B_VX[0], vx, LD_B_VX[1]));
             }
             // Fx55 (LD [I], Vx)
             //
             // Store registers V0 through Vx in memory starting at location I
-            [TK::Keyword(KW::Array), TK::Keyword(kw)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Keyword(KW::Array), TK::Register(vx)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_ARR_VX[0], vx, LD_ARR_VX[1]));
             }
             // Fx65 (LD Vx, [I])
             //
             // Load registers V0 through Vx from memory starting at location I
-            [TK::Keyword(kw), TK::Keyword(KW::Array)] if kw.is_vregister() => {
-                let vx = kw.as_vregister().unwrap_or_else(|| unreachable!());
+            [TK::Register(vx), TK::Keyword(KW::Array)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(LD_VX_ARR[0], vx, LD_VX_ARR[1]));
             }
-            [TK::Keyword(kw), _] if kw.is_vregister() => {
-                let kind = src.kind;
-                let message = format!("expected byte literal, but found {kind:?}");
+            [TK::Register(vx), _] => {
+                let message = format!("expected byte literal, but found {vx}");
                 return Err(self.error(src, message));
             }
-            [TK::Keyword(_), _] => {
-                let kind = src.kind;
+            [TK::Keyword(keyword), _] => {
                 let message =
-                    format!("expected address, label, register 'DT' or 'K', but found {kind:?}");
+                    format!("expected address, label, register 'DT' or 'K', but found {keyword}");
                 return Err(self.error(src, message));
             }
             _ => {
@@ -954,37 +928,34 @@ impl<'a> Assembler<'a> {
     /// 7xnn (ADD Vx, byte)
     /// 8xy4 (ADD Vx, Vy)
     /// Fx1E (ADD I, Vx)
-    fn parse_add(&mut self, _name: Token) -> Chip8Result<()> {
-        use Keyword as KW;
-        use TokenKind as TK;
-
+    fn parse_add(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_add");
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Add));
 
         let [lhs, rhs] = self.parse_arg2()?;
         let signature = [lhs.kind, rhs.kind];
         match signature {
             // 7xnn (ADD Vx, byte)
-            [TK::Keyword(kw), TK::Number] if kw.is_vregister() => {
-                let vx = self.parse_vregister(lhs)?;
+            [TK::Register(vx), TK::Number] => {
+                let vx = vx.as_index();
                 let nn = self.parse_number(rhs)?;
                 self.emit2(encode_xnn(ADD_VX_NN, vx, nn.as_u8()));
             }
             // 8xy4 (ADD Vx, Vy)
-            [TK::Keyword(kw1), TK::Keyword(kw2)] if kw1.is_vregister() && kw2.is_vregister() => {
-                let vx = self.parse_vregister(lhs)?;
-                let vy = self.parse_vregister(rhs)?;
+            [TK::Register(vx), TK::Register(vy)] => {
+                let vx = vx.as_index();
+                let vy = vy.as_index();
                 self.emit2(encode_xyn(ADD_VX_VY[0], vx, vy, ADD_VX_VY[1]));
             }
             // Fx1E (ADD I, Vx)
-            [TK::Keyword(KW::Index), TK::Keyword(kw2)] if kw2.is_vregister() => {
-                let vx = self.parse_vregister(rhs)?;
+            [TK::Keyword(KW::Index), TK::Register(vx)] => {
+                let vx = vx.as_index();
                 self.emit2(encode_xnn(ADD_I_VX[0], vx, ADD_I_VX[1]));
             }
-            [TK::Keyword(kw), _] if kw.is_vregister() => {
-                let kind = rhs.kind;
+            [TK::Keyword(keyword), _] => {
                 return Err(self.error(
                     rhs,
-                    format!("expected register or number literal, but found {kind:?}"),
+                    format!("expected register or number literal, but found {keyword}"),
                 ));
             }
             _ => {
@@ -1026,49 +997,49 @@ impl<'a> Assembler<'a> {
     /// 8xy1 (OR Vx, Vy)
     fn parse_arithmetic_or(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_arithmetic_or");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Or));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Or));
         self.parse_arithmetic(OR_VX_VY)
     }
 
     /// 8xy2 (AND Vx, Vy)
     fn parse_arithmetic_and(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_arithmetic_and");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::And));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::And));
         self.parse_arithmetic(AND_VX_VY)
     }
 
     /// 8xy3 (XOR Vx, Vy)
     fn parse_arithmetic_xor(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_arithmetic_xor");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Xor));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Xor));
         self.parse_arithmetic(XOR_VX_VY)
     }
 
     /// 8xy5 (SUB Vx, Vy)
     fn parse_arithmetic_sub(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_arithmetic_sub");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::Sub));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::Sub));
         self.parse_arithmetic(SUB_VX_VY)
     }
 
     /// 8xy6 (SHR Vx {, Vy})
     fn parse_arithmetic_shr(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_arithmetic_shr");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::ShiftRight));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::ShiftRight));
         self.parse_arithmetic(SHR_VX_VY)
     }
 
     /// 8xy7 (SUBN Vx, Vy)
     fn parse_arithmetic_subn(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_arithmetic_subn");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::SubN));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::SubN));
         self.parse_arithmetic(SUBN_VX_VY)
     }
 
     /// 8xyE (SHL Vx {, Vy})
     fn parse_arithmetic_shl(&mut self, name: Token) -> Chip8Result<()> {
         trace!("parse_arithmetic_shl");
-        debug_assert_eq!(name.kind, TokenKind::Keyword(Keyword::ShiftLeft));
+        debug_assert_eq!(name.kind, TK::Keyword(KW::ShiftLeft));
         self.parse_arithmetic(SHL_VX_VY)
     }
 

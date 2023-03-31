@@ -1,6 +1,6 @@
 //! Tokens
 
-use std::ops;
+use std::{fmt, ops};
 
 #[derive(Debug, Clone)]
 pub struct Token {
@@ -27,6 +27,8 @@ pub enum TokenKind {
     Ident,
     /// Reserved identifiers
     Keyword(Keyword),
+    /// General purpose register V0-VF
+    Register(VReg),
     /// String literal
     String,
     /// Number literal
@@ -40,6 +42,90 @@ pub enum TokenKind {
     Unknown,
     /// End-of-file
     EOF,
+}
+
+impl TokenKind {
+    #[inline]
+    pub fn is_vregister(&self) -> bool {
+        matches!(self, TokenKind::Register(_))
+    }
+}
+
+/// General purpose register V0-VF.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum VReg {
+    V0,
+    V1,
+    V2,
+    V3,
+    V4,
+    V5,
+    V6,
+    V7,
+    V8,
+    V9,
+    VA,
+    VB,
+    VC,
+    VD,
+    VE,
+    VF,
+}
+
+impl VReg {
+    #[rustfmt::skip]
+    pub fn parse(text: impl AsRef<str>) -> Option<Self> {
+        match text.as_ref() {
+            "v0" | "V0" => Some(Self::V0),
+            "v1" | "V1" => Some(Self::V1),
+            "v2" | "V2" => Some(Self::V2),
+            "v3" | "V3" => Some(Self::V3),
+            "v4" | "V4" => Some(Self::V4),
+            "v5" | "V5" => Some(Self::V5),
+            "v6" | "V6" => Some(Self::V6),
+            "v7" | "V7" => Some(Self::V7),
+            "v8" | "V8" => Some(Self::V8),
+            "v9" | "V9" => Some(Self::V9),
+            "va" | "VA" | "v10" | "V10" => Some(Self::VA),
+            "vb" | "VB" | "v11" | "V11" => Some(Self::VB),
+            "vc" | "VC" | "v12" | "V12" => Some(Self::VC),
+            "vd" | "VD" | "v13" | "V13" => Some(Self::VD),
+            "ve" | "VE" | "v14" | "V14" => Some(Self::VE),
+            "vf" | "VF" | "v15" | "V15" => Some(Self::VF),
+
+            _ => None,
+        }
+    }
+
+    /// Get an index that can be used in a bytecode instruction.
+    pub fn as_index(&self) -> u8 {
+        match self {
+            Self::V0 => 0,
+            Self::V1 => 1,
+            Self::V2 => 2,
+            Self::V3 => 3,
+            Self::V4 => 4,
+            Self::V5 => 5,
+            Self::V6 => 6,
+            Self::V7 => 7,
+            Self::V8 => 8,
+            Self::V9 => 9,
+            Self::VA => 10,
+            Self::VB => 11,
+            Self::VC => 12,
+            Self::VD => 13,
+            Self::VE => 14,
+            Self::VF => 15,
+        }
+    }
+}
+
+impl fmt::Display for VReg {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let index = self.as_index();
+        write!(f, "V{index:x}")
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -182,22 +268,23 @@ pub enum Keyword {
     Key,       // K
     Sound,     // ST
 
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-    V8,
-    V9,
-    VA,
-    VB,
-    VC,
-    VD,
-    VE,
-    VF,
+    // TODO: Move registers into dedicated enum
+    // V0,
+    // V1,
+    // V2,
+    // V3,
+    // V4,
+    // V5,
+    // V6,
+    // V7,
+    // V8,
+    // V9,
+    // VA,
+    // VB,
+    // VC,
+    // VD,
+    // VE,
+    // VF,
 }
 
 impl Keyword {
@@ -232,72 +319,45 @@ impl Keyword {
             "K"   => Some(Self::Key),
             "ST"  => Some(Self::Sound),
             // ----------------------------------------------------------------
-            "v0" | "V0" => Some(Self::V0),
-            "v1" | "V1" => Some(Self::V1),
-            "v2" | "V2" => Some(Self::V2),
-            "v3" | "V3" => Some(Self::V3),
-            "v4" | "V4" => Some(Self::V4),
-            "v5" | "V5" => Some(Self::V5),
-            "v6" | "V6" => Some(Self::V6),
-            "v7" | "V7" => Some(Self::V7),
-            "v8" | "V8" => Some(Self::V8),
-            "v9" | "V9" => Some(Self::V9),
-            "va" | "VA" | "v10" | "V10" => Some(Self::VA),
-            "vb" | "VB" | "v11" | "V11" => Some(Self::VB),
-            "vc" | "VC" | "v12" | "V12" => Some(Self::VC),
-            "vd" | "VD" | "v13" | "V13" => Some(Self::VD),
-            "ve" | "VE" | "v14" | "V14" => Some(Self::VE),
-            "vf" | "VF" | "v15" | "V15" => Some(Self::VF),
-
             _ => None,
         }
     }
+}
 
-    /// Convert the keyword to a register index, if it's V0-VF.
-    pub fn as_vregister(&self) -> Option<u8> {
+impl fmt::Display for Keyword {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::V0 => Some(0),
-            Self::V1 => Some(1),
-            Self::V2 => Some(2),
-            Self::V3 => Some(3),
-            Self::V4 => Some(4),
-            Self::V5 => Some(5),
-            Self::V6 => Some(6),
-            Self::V7 => Some(7),
-            Self::V8 => Some(8),
-            Self::V9 => Some(9),
-            Self::VA => Some(10),
-            Self::VB => Some(11),
-            Self::VC => Some(12),
-            Self::VD => Some(13),
-            Self::VE => Some(14),
-            Self::VF => Some(15),
-            _ => None,
+            Self::Add    => write!(f, "ADD"),
+            Self::And    => write!(f, "AND"),
+            Self::Call   => write!(f, "CALL"),
+            Self::Clear  => write!(f, "CLS"),
+            Self::Draw   => write!(f, "DRW"),
+            Self::Load   => write!(f, "LD"),
+            Self::Jump   => write!(f, "JP"),
+            Self::Or     => write!(f, "OR"),
+            Self::ShiftLeft  => write!(f, "SHL"),
+            Self::ShiftRight => write!(f, "SHR"),
+            Self::SkipEq     => write!(f, "SE"),
+            Self::SkipEqNot  => write!(f, "SNE"),
+            Self::SkipKey    => write!(f, "SKP"),
+            Self::SkipKeyNot => write!(f, "SKNP"),
+            Self::Sub    => write!(f, "SUB"),
+            Self::SubN   => write!(f, "SUBN"),
+            Self::System => write!(f, "SYS"),
+            Self::Random => write!(f, "RAND"),
+            Self::Return => write!(f, "RET"),
+            Self::Xor    => write!(f, "XOR"),
+            // ----------------------------------------------------------------
+            Self::Char   => write!(f, "F"),
+            Self::Decimal    => write!(f, "BCD"),
+            Self::Delay  => write!(f, "DT"),
+            Self::Index  => write!(f, "I"),
+            Self::Key    => write!(f, "K"),
+            Self::Sound  => write!(f, "ST"),
+            // ----------------------------------------------------------------
+            _ => Ok(())
         }
-    }
-
-    /// Checks whether the keyword is register.
-    pub fn is_vregister(&self) -> bool {
-        use Keyword as K;
-        matches!(
-            self,
-            K::V0
-                | K::V1
-                | K::V2
-                | K::V3
-                | K::V4
-                | K::V5
-                | K::V6
-                | K::V7
-                | K::V8
-                | K::V9
-                | K::VA
-                | K::VB
-                | K::VC
-                | K::VD
-                | K::VE
-                | K::VF
-        )
     }
 }
 
