@@ -7,7 +7,13 @@ mod disasm;
 mod error;
 mod vm;
 
-pub use self::{asm::assemble, vm::Hz};
+pub use self::{
+    asm::assemble,
+    cpu::Chip8Cpu,
+    error::{Chip8Error, Chip8Result},
+    vm::Hz,
+    vm::{Chip8Conf, Chip8Vm},
+};
 
 /// Version of *this* implementation.
 pub const IMPL_VERSION: &str = env!("CARGO_PKG_VERSION");

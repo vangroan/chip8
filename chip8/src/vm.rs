@@ -51,6 +51,8 @@ impl Chip8Vm {
         // Reset the program counter to prepare for execution.
         self.cpu.pc = MEM_START;
 
+        self.reset();
+
         Ok(())
     }
 }
@@ -63,7 +65,7 @@ pub enum Flow {
 }
 
 /// VM Configuration Parameters.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Chip8Conf {
     pub clock_frequency: Option<Hz>,
 }

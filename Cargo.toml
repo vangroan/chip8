@@ -3,6 +3,7 @@
 members = [
     "chip8",
     "chip8-cli",
+    "chip8-win",
 ]
 
 [profile.release]
