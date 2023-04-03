@@ -132,7 +132,11 @@ impl Display for AsmError {
 
         const PADDING: usize = 1;
         let relative_index = (self.span.index - self.line_span.index) as usize;
-        log::trace!("token span index: {}, line span index: {}", self.span.index, self.line_span.index);
+        log::trace!(
+            "token span index: {}, line span index: {}",
+            self.span.index,
+            self.line_span.index
+        );
         log::trace!("relative index: {}", relative_index);
 
         let indent =
@@ -142,8 +146,8 @@ impl Display for AsmError {
         // EOF span has size 0, so we clamp to 1 for a minimal marker to show up.
         let marker_width = usize::max(1, self.span.size as usize);
         let marker = String::from_utf8(vec![Self::MARKER; marker_width]).unwrap_or_default();
-        writeln!(f, "{margin} |{indent}{marker}")?;  // marker
-        writeln!(f, "{margin} |")?;  // empty line
+        writeln!(f, "{margin} |{indent}{marker}")?; // marker
+        writeln!(f, "{margin} |")?; // empty line
 
         Ok(())
     }

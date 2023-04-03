@@ -9,12 +9,6 @@ use super::{lexer::LexerIter, Lexer, Span, Token, TokenKind};
 ///
 /// Tokens are lazily lexed. Peeking or consuming the next token
 /// triggers the internal lexer.
-///
-/// The peek semantics are determined by the internal `MultiPeek`.
-/// Calling `TokenStream::peek` is not idempotent, advancing a peek
-/// cursor forward by one token for each `peek()` call. The cursor
-/// can be reset explicitly using `TokenStream::reset_peek` or
-/// implicitly by calling one of the consuming methods.
 pub struct TokenStream<'a> {
     lexer: Peekable<LexerIter<'a>>,
     /// Keep reference to the source so the parser can
@@ -80,7 +74,6 @@ impl<'a> TokenStream<'a> {
     /// Does not consume the token if the types do not match.
     pub fn match_token(&mut self, token_kind: TokenKind) -> bool {
         // Ensure clean peek state.
-        // self.lexer.reset_peek();
 
         match self.lexer.peek() {
             Some(token) => {
@@ -92,7 +85,6 @@ impl<'a> TokenStream<'a> {
                 is_match
             }
             None => {
-                // self.lexer.reset_peek();
                 false
             }
         }
@@ -113,7 +105,6 @@ impl<'a> TokenStream<'a> {
     /// Panics when at end-of-file.
     pub fn consume(&mut self, token_kind: TokenKind) -> Chip8Result<Token> {
         // Ensure clean peek state.
-        // self.lexer.reset_peek();
 
         // We should not consume the token if the types don't match.
         match self.lexer.peek() {
@@ -166,34 +157,25 @@ impl<'a> TokenStream<'a> {
 
     /// Consumes one or more tokens while the token's matches given kind.
     pub fn ignore_many(&mut self, kind: TokenKind) {
-        // self.lexer.reset_peek();
         if let Some(token) = self.lexer.peek() {
             if token.kind == kind {
                 self.next_token();
-            } else {
-                // self.lexer.reset_peek();
             }
         }
     }
 
     /// Consumes one or more tokens while the given predicate tests as `true`.
     pub fn ignore_while(&mut self, predicate: impl Fn(TokenKind) -> bool) {
-        // self.lexer.reset_peek();
         while let Some(token) = self.lexer.peek() {
             if predicate(token.kind) {
                 self.next_token();
             } else {
-                // self.lexer.reset_peek();
                 return;
             }
         }
     }
 
     /// Return the current token without advancing the cursor.
-    ///
-    /// Subsequent calls to peek will look further ahead.
-    /// Call [`reset_peek`] for the lookahead to return to the immediate
-    /// next token.
     ///
     /// Returns `None` when lexing is done.
     #[inline]
@@ -206,10 +188,4 @@ impl<'a> TokenStream<'a> {
     pub fn peek_kind(&mut self) -> Option<TokenKind> {
         self.lexer.peek().map(|token| token.kind)
     }
-
-    // Reset the internal peek cursor.
-    // #[inline]
-    // pub fn reset_peek(&mut self) {
-    //     self.lexer.reset_peek()
-    // }
 }
