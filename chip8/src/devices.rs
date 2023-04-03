@@ -34,4 +34,5 @@ pub enum Input {
     KeyC,
     KeyD,
     KeyE,
+    KeyF = 0xF,
 }

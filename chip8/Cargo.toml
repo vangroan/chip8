@@ -1,24 +1,12 @@
 [package]
 name = "chip8"
-version = "0.2.0"
-authors = ["Willem Victor <wimpievictor@gmail.com>"]
-edition = "2018"
+version = "0.3.0"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[profile.release]
-# Increases runtime performance because
-# LLVM has more opportunities to inline functions.
-#
-# Slows down compilation.
-codegen-units = 1
-lto = "fat"
-
-[[bin]]
-name = "chip8"
-path = "src/bin/cli.rs"
-
 [dependencies]
+log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rand = "0.8"
 
 [dev-dependencies]
@@ -27,8 +15,6 @@ criterion = "0.4"
 [[bench]]
 name = "maze"
 harness = false
-# FIXME: criterion is ignoring the feature defined here
-features = ["throttle"]
 
 [features]
 default = []
