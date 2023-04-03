@@ -119,7 +119,6 @@ impl<'a> TokenStream<'a> {
         match self.lexer.peek() {
             Some(token) => {
                 if token.kind != token_kind {
-                    // TODO: Return parsing error.
                     Err(Chip8Error::from(TokenError {
                         expected: token_kind,
                         encountered: token.kind,
