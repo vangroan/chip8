@@ -84,9 +84,7 @@ impl<'a> TokenStream<'a> {
                 // peek is reset by next()
                 is_match
             }
-            None => {
-                false
-            }
+            None => false,
         }
     }
 
