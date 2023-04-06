@@ -65,7 +65,7 @@ pub enum Flow {
     Error,
     Interrupt,
     Draw,
-    Sound(bool),
+    Sound,
     /// Wait for a keypress.
     ///
     /// This is triggered by the opcode `Fx0A` (`LD Vx, K`), which stops
@@ -125,13 +125,18 @@ impl Chip8Vm {
     pub fn execute(&mut self) -> Chip8Result<Flow> {
         self.reset();
 
-        match self.resume() {
-            Flow::Error => match self.cpu.error {
-                Some(err) => Err(Chip8Error::Runtime(err)),
-                None => Ok(Flow::Error),
-            },
-            flow => Ok(flow),
+        loop {
+            match self.resume() {
+                Flow::Error => match self.cpu.error {
+                    Some(err) => return Err(Chip8Error::Runtime(err)),
+                    None => return Ok(Flow::Error),
+                },
+                Flow::Interrupt => break,
+                _ => {}
+            }
         }
+
+        Ok(Flow::Ok)
     }
 
     fn resume(&mut self) -> Flow {
@@ -198,6 +203,7 @@ impl Chip8Vm {
                     // TODO: Remove infinite loop guard
                     if self.guard_infinite() {
                         self.cpu.set_error("infinite loop guard");
+                        control_flow = Flow::Error;
                     }
                 }
                 // 2NNN (CALL addr)
@@ -327,6 +333,7 @@ impl Chip8Vm {
 
                     // If a pixel was erased, then a collision occurred.
                     self.cpu.registers[0xF] = is_erased as u8;
+                    control_flow = Flow::Draw;
                 }
                 // Unsupported operation.
                 _ => {
@@ -340,9 +347,11 @@ impl Chip8Vm {
     }
 
     /// Execute an arithmetic instruction
+    #[inline]
     #[must_use]
     fn exec_math(&mut self, op: u8, vx: u8, vy: u8, n: u8) -> Flow {
         debug_assert_eq!(op, 0x8);
+        let mut control_flow = Flow::Ok;
 
         match n {
             // 8XY0 (LD Vx, Vy)
@@ -451,17 +460,19 @@ impl Chip8Vm {
             // Unsupported operation.
             _ => {
                 self.cpu.set_error("unsupported math opcode");
-                return Flow::Error;
+                control_flow = Flow::Error;
             }
         }
 
-        Flow::Ok
+        control_flow
     }
 
     /// Execute a miscellaneous instruction
     #[inline]
     #[must_use]
     fn exec_misc(&mut self, op: u8, vx: u8, nn: u8) -> Flow {
+        let mut control_flow = Flow::Ok;
+
         match nn {
             // ----------------------------------------------------------------
             // 00E0 (CLS)
@@ -495,7 +506,6 @@ impl Chip8Vm {
                 if self.cpu.key_state(self.cpu.registers[vx as usize & 0xF]) {
                     self.cpu.pc += 2;
                 }
-                self.cpu.pc += 2;
             }
             0xA1 => todo!("SKNP Vx"),
             // ----------------------------------------------------------------
@@ -524,7 +534,7 @@ impl Chip8Vm {
                     // rewind the program counter to stall the machine
                     self.cpu.pc -= 2;
                     self.cpu.key_wait = true;
-                    return Flow::KeyWait;
+                    control_flow = Flow::KeyWait;
                 }
             }
             // Fx15 (LD DT, Vx)
@@ -549,8 +559,7 @@ impl Chip8Vm {
                 let vx = self.cpu.op_x();
                 self.cpu.sound_timer = self.cpu.registers[vx as usize];
                 self.cpu.buzzer_state = self.cpu.sound_timer > 0;
-
-                // self.devices.buzz(self.cpu.buzzer_state);
+                control_flow = Flow::Sound;
             }
             0x1E => todo!("ADD I, Vx"),
             0x29 => todo!("LD F, Vx"),
@@ -561,11 +570,11 @@ impl Chip8Vm {
             // Unsupported operation.
             _ => {
                 self.cpu.set_error("unsupported misc opcode");
-                return Flow::Error;
+                control_flow = Flow::Error;
             }
         }
 
-        Flow::Ok
+        control_flow
     }
 }
 

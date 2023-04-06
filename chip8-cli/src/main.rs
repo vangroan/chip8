@@ -31,10 +31,6 @@ fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
     let mut vm = Chip8Vm::new(Chip8Conf::default());
     vm.load_bytecode(bytecode.as_slice())?;
 
-    Disassembler::new(bytecode.as_slice()).print_bytecode();
-
-    // println!("{}", vm.dump_ram(include_bytes!("../programs/maze").len())?);
-
     let start = Instant::now();
     let result = vm.execute();
     let end = Instant::now();
