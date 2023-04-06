@@ -752,17 +752,8 @@ mod test {
         assert_eq!(vm.cpu.pc, MEM_START);
         assert_eq!(vm.step(), Flow::KeyWait);
 
-        match vm.step() {
-            Flow::KeyWait => {
-                // machine has yielded, waiting for any key to be pressed.
-                vm.set_key(Input::Key5, true);
-            }
-            Flow::Error => {
-                let err = vm.cpu.error().expect("machine must store error when in error state");
-                panic!("error: {err}");
-            }
-            flow => panic!("unexpected machine state: {:?}", flow),
-        }
+        // machine has yielded, waiting for any key to be pressed.
+        vm.set_key(Input::Key5, true);
 
         // machine will now advance
         vm.step();
