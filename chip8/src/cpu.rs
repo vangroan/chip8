@@ -23,6 +23,10 @@ pub struct Chip8Cpu {
     pub(crate) sound_timer: u8,
     /// Switch tracking whether the buzzer should be on or off.
     pub(crate) buzzer_state: bool,
+    /// Indicates that the machine is waiting for a keypress.
+    pub(crate) key_wait: bool,
+    /// Keyboard input state. Pressed is a 1 bit, released is a 0 bit.
+    pub(crate) key_state: u16,
 
     // ------------------------------------------------------------------------
     // Memory
@@ -51,6 +55,8 @@ impl Default for Chip8Cpu {
             delay_timer: 0,
             sound_timer: 0,
             buzzer_state: false,
+            key_wait: false,
+            key_state: 0,
 
             ram: Box::new([0; MEM_SIZE]),
             stack: Box::new([0; STACK_SIZE]),
@@ -91,6 +97,49 @@ impl Chip8Cpu {
         self.display.fill(false);
     }
 
+    pub fn set_key_state(&mut self, key_id: u8, state: bool) {
+        if key_id <= KEY_COUNT {
+            if state {
+                self.key_state |= 1 << key_id;
+            } else {
+                self.key_state &= !(1 << key_id);
+            }
+        }
+    }
+
+    pub fn key_state(&self, key_id: u8) -> bool {
+        if key_id <= KEY_COUNT {
+            self.key_state & (1 << key_id) > 0
+        } else {
+            false
+        }
+    }
+
+    /// Check whether any key is pressed down.
+    #[inline(always)]
+    pub fn any_key(&self) -> bool {
+        self.key_state > 0
+    }
+
+    /// Retrieve the value of the first key that is pressed down.
+    #[inline]
+    pub fn first_key(&self) -> Option<u8> {
+        if self.any_key() {
+            for k in 0..KEY_COUNT {
+                if self.key_state(k) {
+                    return Some(k);
+                }
+            }
+        }
+        None
+    }
+
+    /// Clear the keyboard input state, setting all keys to up.
+    #[inline(always)]
+    pub fn clear_keys(&mut self) {
+        self.key_state = 0;
+    }
+
     /// Count down the delay timer.
     #[inline]
     pub fn tick_delay(&mut self) {
@@ -108,6 +157,12 @@ impl Chip8Cpu {
         if !underflow {
             self.sound_timer = val;
         }
+    }
+
+    /// Extract the instruction at the current program counter.
+    #[inline(always)]
+    pub fn instr(&self) -> [u8; 2] {
+        [self.ram[self.pc & 0xFFF], self.ram[(self.pc + 1) & 0xFFF]]
     }
 
     /// Extract opcode from the current program pointer.
@@ -156,5 +211,40 @@ impl Chip8Cpu {
     #[inline(always)]
     pub fn op_n(&self) -> u8 {
         op_n(&*self.ram, self.pc)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_key_state() {
+        let mut cpu = Chip8Cpu::default();
+
+        cpu.set_key_state(0, true);
+        assert_eq!(cpu.key_state, 0b00000000_00000001);
+        assert!(cpu.key_state(0));
+        assert!(!cpu.key_state(1));
+        assert!(!cpu.key_state(7));
+
+        cpu.set_key_state(7, true);
+        assert_eq!(cpu.key_state, 0b00000000_10000001);
+        assert!(cpu.key_state(0));
+        assert!(!cpu.key_state(1));
+        assert!(cpu.key_state(7));
+
+        cpu.set_key_state(0, false);
+        assert_eq!(cpu.key_state, 0b00000000_10000000);
+        assert!(!cpu.key_state(0));
+        assert!(!cpu.key_state(1));
+        assert!(cpu.key_state(7));
+
+        cpu.set_key_state(15, true);
+        assert_eq!(cpu.key_state, 0b10000000_10000000);
+        assert!(!cpu.key_state(0));
+        assert!(!cpu.key_state(1));
+        assert!(cpu.key_state(7));
+        assert!(cpu.key_state(15));
     }
 }

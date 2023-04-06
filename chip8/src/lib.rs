@@ -3,6 +3,7 @@ mod bytecode;
 mod clock;
 pub mod constants;
 mod cpu;
+mod devices;
 mod disasm;
 mod error;
 mod vm;

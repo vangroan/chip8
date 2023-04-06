@@ -37,5 +37,8 @@ pub const NANOS_IN_SECOND: u64 = 1_000_000_000;
 /// Time in nanoseconds a single clock cycle takes, precalculated.
 pub const CLOCK_CYCLE_TIME: u64 = NANOS_IN_SECOND / DELAY_FREQUENCY;
 
+/// Number of keys ob the keyboard (0x0-0xF)
+pub const KEY_COUNT: u8 = 16;
+
 /// Type for storing the 12-bit memory addresses.
 pub type Address = u16;
