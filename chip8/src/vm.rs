@@ -715,8 +715,6 @@ fn op_trace_xy_op(_: &str, _: &Chip8Cpu) {}
 
 #[cfg(test)]
 mod test {
-    use core::panic;
-
     use super::*;
 
     #[test]
