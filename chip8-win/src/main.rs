@@ -2,7 +2,7 @@ use std::error::Error;
 
 #[macro_use]
 extern crate slog;
-use chip8_win::Chip8App;
+use chip8_win::{Chip8App, InputMap};
 use log::{error, info};
 use slog::Drain;
 
@@ -16,7 +16,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _log_guard = slog_stdlog::init_with_level(log::Level::Trace).unwrap();
 
     info!("starting...");
-    let mut app = Chip8App::new()?;
+
+    // Load input configuration
+    let input_map = InputMap::from_file("chip8-win/input.yaml")?;
+    log::debug!("loaded input map");
+
+    let mut app = Chip8App::new(input_map)?;
 
     app.load_rom("chip8/programs/maze")?;
 

@@ -10,17 +10,18 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::error::AppError;
+use crate::{actions::*, error::AppError, InputMap};
 
 /// Chip8 Application
 pub struct Chip8App {
     window: Window,
     event_loop: EventLoop<()>,
     vm: Chip8Vm,
+    input_map: InputMap,
 }
 
 impl Chip8App {
-    pub fn new() -> Result<Self, AppError> {
+    pub fn new(input_map: InputMap) -> Result<Self, AppError> {
         let inner_size = LogicalSize::new(640, 480);
 
         let event_loop = EventLoopBuilder::new().build();
@@ -37,6 +38,7 @@ impl Chip8App {
             window,
             event_loop,
             vm,
+            input_map,
         })
     }
 
@@ -66,11 +68,22 @@ impl Chip8App {
             match event {
                 EV::NewEvents(_) => {
                     // Frame start
+                    self.input_map.clear_state();
                 }
                 EV::MainEventsCleared => {
-                    // Update
+                    // Frame Update
 
-                    self.vm.execute().expect("vm error");
+                    if self.input_map.is_action_pressed(DEV_CONSOLE) {
+                        log::info!("Developer Console");
+                    }
+
+                    if self.input_map.is_action_pressed(EXIT) {
+                        log::info!("Exit");
+                        control_flow.set_exit();
+                    }
+
+                    // TODO: graceful error handling
+                    self.vm.tick().unwrap();
 
                     self.window.request_redraw();
                 }
@@ -79,6 +92,11 @@ impl Chip8App {
                 }
                 EV::WindowEvent { window_id, event } if window_id == main_window_id => {
                     match event {
+                        WE::KeyboardInput { input, .. } => {
+                            if let Some(virtual_keycode) = input.virtual_keycode {
+                                self.input_map.push_key(virtual_keycode, input.state);
+                            }
+                        }
                         WE::CloseRequested => {
                             control_flow.set_exit();
                         }

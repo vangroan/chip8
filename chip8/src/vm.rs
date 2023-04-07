@@ -8,7 +8,7 @@ use crate::{
     clock::Clock,
     constants::*,
     cpu::Chip8Cpu,
-    devices::Input,
+    devices::KeyCode,
     error::{Chip8Error, Chip8Result},
 };
 
@@ -98,14 +98,15 @@ impl Chip8Vm {
     // FIXME: Currently we can't break out of the infinite loops that programs use.
     fn guard_infinite(&mut self) -> bool {
         self.loop_counter += 1;
-        self.loop_counter > INFINITE_LOOP_LIMIT
+        self.loop_counter > INFINITE_LOOP_LIMIT;
+        false
     }
 
     /// Sets the keyboard key input state.
     ///
     /// If the VM is waiting for keyboard input, the `key_wait` flag will
     /// be cleared so it can be resumed.
-    pub fn set_key(&mut self, key: Input, pressed: bool) {
+    pub fn set_key(&mut self, key: KeyCode, pressed: bool) {
         self.cpu.set_key_state(key as u8, pressed);
         self.cpu.key_wait = false;
     }
@@ -143,6 +144,18 @@ impl Chip8Vm {
         self.cpu.trap = false;
         self.cpu.error = None;
         self.step()
+    }
+
+    pub fn tick(&mut self) -> Result<Flow, Chip8Error> {
+        match self.step() {
+            Flow::Error => self
+                .cpu
+                .error
+                .map(Chip8Error::Runtime)
+                .map(Result::Err)
+                .unwrap_or_else(|| Err(Chip8Error::Runtime("unspecified VM error"))),
+            flow => Ok(flow),
+        }
     }
 
     fn step(&mut self) -> Flow {
@@ -751,7 +764,7 @@ mod test {
         assert_eq!(vm.step(), Flow::KeyWait);
 
         // machine has yielded, waiting for any key to be pressed.
-        vm.set_key(Input::Key5, true);
+        vm.set_key(KeyCode::Key5, true);
 
         // machine will now advance
         vm.step();

@@ -11,6 +11,7 @@ mod vm;
 pub use self::{
     asm::assemble,
     cpu::Chip8Cpu,
+    devices::KeyCode,
     error::{Chip8Error, Chip8Result},
     vm::Hz,
     vm::{Chip8Conf, Chip8Vm},
