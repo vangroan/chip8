@@ -10,8 +10,10 @@ pub(crate) mod actions {
     pub const EXIT: &str = "exit";
 }
 
+pub type EventLoop = winit::event_loop::EventLoop<()>;
+
 pub use self::{
     app::Chip8App,
     error::{AppError, ErrorKind},
-    inputmap::{InputEvent, InputMap},
+    inputmap::{InputKind, InputMap},
 };

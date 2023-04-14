@@ -1,5 +1,8 @@
 //! Virtual machine.
-use std::{fmt::Write, time::Duration};
+use std::{
+    fmt::{self, Write},
+    time::Duration,
+};
 
 use rand::prelude::*;
 
@@ -487,6 +490,7 @@ impl Chip8Vm {
         let mut control_flow = Flow::Ok;
 
         match nn {
+            0x0 => { /* No Op */ }
             // ----------------------------------------------------------------
             // 00E0 (CLS)
             //
@@ -626,6 +630,21 @@ impl Chip8Vm {
                 }
             }
             writeln!(buf)?;
+        }
+
+        Ok(buf)
+    }
+
+    pub fn dump_keys(&self) -> Result<String, fmt::Error> {
+        let mut buf = String::new();
+
+        if self.cpu.any_key() {
+            write!(buf, "keys: ")?;
+            for i in 0..KEY_COUNT {
+                if self.cpu.key_state(i) {
+                    write!(buf, "k{i:x}")?;
+                }
+            }
         }
 
         Ok(buf)

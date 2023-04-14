@@ -21,11 +21,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input_map = InputMap::from_file("chip8-win/input.yaml")?;
     log::debug!("loaded input map");
 
-    let mut app = Chip8App::new(input_map)?;
+    // Event loop can only be created once per process.
+    let mut event_loop = Chip8App::create_event_loop();
+    let mut app = Chip8App::new(&event_loop, input_map)?;
 
     app.load_rom("chip8/programs/maze")?;
 
-    match app.run() {
+    match app.run(&mut event_loop) {
         Ok(_) => {}
         Err(err) => {
             error!("{err}");

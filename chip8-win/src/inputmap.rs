@@ -20,7 +20,7 @@ pub struct InputMap {
     /// Mapping of host keyboard keys to application actions, by index.
     keys: Box<[(VirtualKeyCode, usize)]>,
     /// Buffer of collected events, as they happen.
-    events: VecDeque<InputEvent>,
+    events: VecDeque<InputKind>,
     /// Current state of the key. Whether it is pressed down.
     state: Vec<InputState>,
 }
@@ -51,14 +51,32 @@ struct InputDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputEvent {
+pub struct InputEvent {
+    pub kind: InputKind,
+    pub state: ElementState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputKind {
     Action(SmolStr),
     Chip8(u8),
 }
 
+impl InputKind {
+    pub fn as_chip8(&self) -> Option<KeyCode> {
+        match self {
+            Self::Chip8(key_id) => match KeyCode::try_from(*key_id) {
+                Ok(keycode) => Some(keycode),
+                Err(_) => None,
+            },
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct InputState {
-    event: InputEvent,
+    event: InputKind,
     pressed: bool,
 }
 
@@ -94,7 +112,7 @@ impl InputMap {
     }
 
     /// Given a user input keycode, map it to either a Chip8 key, or a named action.
-    pub fn map_key(&self, key: VirtualKeyCode) -> Option<InputEvent> {
+    pub fn map_key(&self, key: VirtualKeyCode) -> Option<InputKind> {
         self.keys
             .iter()
             .find(|(keycode, _)| *keycode == key)
@@ -102,9 +120,9 @@ impl InputMap {
             .and_then(|index| self.actions.get(index))
             .and_then(|input_def| {
                 if let Some(key_code) = input_def.chip8 {
-                    Some(InputEvent::Chip8(key_code.as_u8()))
+                    Some(InputKind::Chip8(key_code.as_u8()))
                 } else if let Some(action_name) = &input_def.action {
-                    Some(InputEvent::Action(action_name.clone()))
+                    Some(InputKind::Action(action_name.clone()))
                 } else {
                     None
                 }
@@ -140,16 +158,16 @@ impl InputMap {
         let query = action.as_ref().trim();
         self.state
             .iter()
-            .filter(|state| matches!(state.event, InputEvent::Action(_)))
+            .filter(|state| matches!(state.event, InputKind::Action(_)))
             .find(|state| match state.event {
-                InputEvent::Action(ref name) => name == query,
+                InputKind::Action(ref name) => name == query,
                 _ => false,
             })
             .map(|state| state.pressed)
             .unwrap_or(false)
     }
 
-    pub fn drain_events(&mut self) -> impl Iterator<Item = InputEvent> + '_ {
+    pub fn drain_events(&mut self) -> impl Iterator<Item = InputKind> + '_ {
         self.events.drain(..)
     }
 
@@ -160,6 +178,10 @@ impl InputMap {
         for state in &mut self.state {
             state.pressed = false;
         }
+    }
+
+    pub fn iter_chip8(&self) -> impl Iterator<Item = KeyCode> + '_ {
+        self.events.iter().filter_map(|ev| ev.as_chip8())
     }
 }
 
