@@ -1,6 +1,7 @@
 mod app;
 mod error;
 mod inputmap;
+mod render;
 
 /// Hardcoded input action names.
 pub(crate) mod actions {

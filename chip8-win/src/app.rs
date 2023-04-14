@@ -1,7 +1,6 @@
 use std::{io::Read, num::NonZeroU32};
 
 use chip8::prelude::*;
-use glow::HasContext;
 use glutin::{
     config::{Config as GlutinConfig, ConfigTemplateBuilder},
     context::{
@@ -23,14 +22,14 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::{actions::*, error::AppError, EventLoop, InputMap};
+use crate::{actions::*, error::AppError, render::Render, EventLoop, InputMap};
 
 /// Chip8 Application
 pub struct Chip8App {
     window: Window,
     gl_context: PossiblyCurrentContext,
-    gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
+    render: Render,
     vm: Chip8Vm,
     input_map: InputMap,
 }
@@ -181,9 +180,7 @@ impl Chip8App {
         // --------------------------------------------------------------------
         // OpenGL Function Pointers
 
-        // Create glow context.
-        //
-        // NOTE: For WGL (Windows) the OpenGL context must be current,
+        // For WGL (Windows) the OpenGL context must be current,
         // otherwise only a subset of functions are loaded.
         if cfg!(wgl_backend) {
             assert!(
@@ -192,9 +189,9 @@ impl Chip8App {
             );
         }
 
-        let gl = unsafe {
-            glow::Context::from_loader_function_cstr(|symbol| gl_display.get_proc_address(symbol))
-        };
+        // Create renderer
+        let render = Render::new(&gl_display);
+        log::info!("Created OpenGL renderer:\n{}", render.opengl_info());
 
         // --------------------------------------------------------------------
         // Chip8 Virtual Machine
@@ -206,8 +203,8 @@ impl Chip8App {
         Ok(Self {
             window,
             gl_context,
-            gl,
             gl_surface,
+            render,
             vm,
             input_map,
         })
@@ -280,16 +277,29 @@ impl Chip8App {
                 EV::RedrawRequested(_) => {
                     // Redraw the application.
                     if let Ok(_) = self.gl_context.make_current(&self.gl_surface) {
-                        unsafe {
-                            self.gl.clear_color(0.1, 0.1, 0.1, 0.9);
-                            self.gl.clear(glow::COLOR_BUFFER_BIT);
-                        }
+                        self.render
+                            .clear_window(29.0 / 255.0, 33.0 / 255.0, 40.0 / 255.0, 0.9);
 
                         self.gl_surface.swap_buffers(&self.gl_context).unwrap();
                     }
                 }
                 EV::WindowEvent { window_id, event } if window_id == main_window_id => {
                     match event {
+                        WE::Resized(size) => {
+                            // Zero sized surface is invalid.
+                            if size.width != 0 && size.height != 0 {
+                                // Some platforms like EGL require resizing GL surface to update the size.
+                                // Notable platforms here are Wayland and macOS, others don't require it
+                                // and the function is no-op, but it's wise to resize it for portability
+                                // reasons.
+                                self.gl_surface.resize(
+                                    &self.gl_context,
+                                    NonZeroU32::new(size.width).unwrap(),
+                                    NonZeroU32::new(size.height).unwrap(),
+                                );
+                                // TODO: Resize OpenGL viewport.
+                            }
+                        }
                         WE::KeyboardInput { input, .. } => {
                             if let Some(virtual_keycode) = input.virtual_keycode {
                                 self.input_map.push_key(virtual_keycode, input.state);
@@ -298,7 +308,6 @@ impl Chip8App {
                         WE::CloseRequested => {
                             control_flow.set_exit();
                         }
-                        WE::Resized(_new_size) => {}
                         _ => { /* blank */ }
                     }
                 }
