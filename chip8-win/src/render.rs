@@ -32,16 +32,19 @@ pub struct Render {
     gl: Rc<GlowContext>,
     info: OpenGLInfo,
     framebuffer: Framebuffer,
+    shader: ShaderProgram,
 }
 
 impl Render {
     pub fn new(gl: Rc<GlowContext>) -> Self {
         let info = OpenGLInfo::new(gl.as_ref());
         let framebuffer = Self::create_framebuffer(gl.as_ref());
+        let shader = Self::load_shaders(gl.as_ref());
         Self {
             gl,
             info,
             framebuffer,
+            shader,
         }
     }
 
@@ -132,6 +135,33 @@ impl Render {
         }
     }
 
+    fn load_shaders(gl: &GlowContext) -> ShaderProgram {
+        unsafe {
+            let vert_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
+            gl.shader_source(vert_shader, include_str!("shader_chip8.vert"));
+
+            let geom_shader = gl.create_shader(glow::GEOMETRY_SHADER).unwrap();
+            gl.shader_source(geom_shader, include_str!("shader_chip8.geom"));
+
+            let frag_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
+            gl.shader_source(frag_shader, include_str!("shader_chip8.frag"));
+
+            gl_error!(gl);
+
+            let program = gl.create_program().unwrap();
+            gl.link_program(program);
+            gl_error!(gl);
+
+            // Flag the shader objects for deletion. They will be deleted later
+            // automatically when they're detached from the shader program.
+            gl.delete_shader(vert_shader);
+            gl.delete_shader(geom_shader);
+            gl.delete_shader(frag_shader);
+
+            ShaderProgram(program)
+        }
+    }
+
     fn _create_buffers(_gl: &GlowContext) {
         todo!("create vertex buffer and frame buffer")
     }
@@ -153,8 +183,17 @@ impl Drop for Render {
         let gl = self.gl.as_ref();
 
         unsafe {
+            log::debug!("deleting render texture: {:?}", self.framebuffer.tex);
+            gl.delete_texture(self.framebuffer.tex);
+
+            log::debug!("deleting render buffer: {:?}", self.framebuffer.rbo);
+            gl.delete_renderbuffer(self.framebuffer.rbo);
+
             log::debug!("deleting frame buffer: {:?}", self.framebuffer.fbo);
             gl.delete_framebuffer(self.framebuffer.fbo);
+
+            log::debug!("deleting shader program: {:?}", self.shader.0);
+            gl.delete_program(self.shader.0);
         }
     }
 }
@@ -164,6 +203,8 @@ struct Framebuffer {
     tex: glow::Texture,
     rbo: glow::Renderbuffer,
 }
+
+struct ShaderProgram(glow::NativeProgram);
 
 pub struct OpenGLInfo {
     pub version: String,
