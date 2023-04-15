@@ -1,6 +1,7 @@
 use std::fmt;
 use std::rc::Rc;
 
+use chip8::constants::{DISPLAY_BUFFER_SIZE, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use glow::{Context as GlowContext, HasContext};
 
 macro_rules! gl_error {
@@ -9,8 +10,7 @@ macro_rules! gl_error {
         {
             let line = line!();
             let file = file!();
-            // type assert
-            let _: &glow::Context = &$gl;
+            let _: &glow::Context = &$gl; // type assert
             let mut has_error = false;
             loop {
                 let err = $gl.get_error();
@@ -27,6 +27,23 @@ macro_rules! gl_error {
     };
 }
 
+macro_rules! shader_error {
+    ($gl:expr, $shader:expr, $name:expr) => {{
+        let line = line!();
+        let file = file!();
+        let _: &glow::Context = &$gl; // type assert
+        let _: &glow::NativeShader = &$shader;
+        if !$gl.get_shader_compile_status($shader) {
+            log::error!(
+                "failed to compile {} [{file}:{line}]: {}",
+                $name,
+                $gl.get_shader_info_log($shader)
+            );
+            panic!("shader compilation error");
+        }
+    }};
+}
+
 pub struct Render {
     /// The interface to the loaded OpenGL function.
     gl: Rc<GlowContext>,
@@ -39,7 +56,7 @@ impl Render {
     pub fn new(gl: Rc<GlowContext>) -> Self {
         let info = OpenGLInfo::new(gl.as_ref());
         let framebuffer = Self::create_framebuffer(gl.as_ref());
-        let shader = Self::load_shaders(gl.as_ref());
+        let shader = Self::compile_shaders(gl.as_ref());
         Self {
             gl,
             info,
@@ -135,22 +152,33 @@ impl Render {
         }
     }
 
-    fn load_shaders(gl: &GlowContext) -> ShaderProgram {
+    fn compile_shaders(gl: &GlowContext) -> ShaderProgram {
+        log::debug!("compiling shaders");
         unsafe {
             let vert_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
             gl.shader_source(vert_shader, include_str!("shader_chip8.vert"));
+            gl.compile_shader(vert_shader);
+            shader_error!(gl, vert_shader, "vertex shader");
 
             let geom_shader = gl.create_shader(glow::GEOMETRY_SHADER).unwrap();
             gl.shader_source(geom_shader, include_str!("shader_chip8.geom"));
+            gl.compile_shader(geom_shader);
+            shader_error!(gl, vert_shader, "geometry shader");
 
             let frag_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
             gl.shader_source(frag_shader, include_str!("shader_chip8.frag"));
-
-            gl_error!(gl);
+            gl.compile_shader(frag_shader);
+            shader_error!(gl, vert_shader, "fragment shader");
 
             let program = gl.create_program().unwrap();
+            gl.attach_shader(program, vert_shader);
+            gl.attach_shader(program, geom_shader);
+            gl.attach_shader(program, frag_shader);
             gl.link_program(program);
-            gl_error!(gl);
+            if !gl.get_program_link_status(program) {
+                let message = gl.get_program_info_log(program);
+                log::error!("failed to link shader program: {message}");
+            }
 
             // Flag the shader objects for deletion. They will be deleted later
             // automatically when they're detached from the shader program.
@@ -162,7 +190,19 @@ impl Render {
         }
     }
 
-    fn _create_buffers(_gl: &GlowContext) {
+    fn create_points(gl: &GlowContext) {
+        unsafe {
+            let vertex_buf = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buf));
+            gl.buffer_storage(
+                glow::ARRAY_BUFFER,
+                (DISPLAY_BUFFER_SIZE * std::mem::size_of::<Point>()) as i32,
+                None,
+                glow::DYNAMIC_DRAW,
+            );
+            gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            gl_error!(gl);
+        }
         todo!("create vertex buffer and frame buffer")
     }
 
@@ -205,6 +245,14 @@ struct Framebuffer {
 }
 
 struct ShaderProgram(glow::NativeProgram);
+
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
+#[repr(C)]
+struct Point {
+    position: [f32; 2],
+    alpha: f32,
+    _pad: u32,
+}
 
 pub struct OpenGLInfo {
     pub version: String,

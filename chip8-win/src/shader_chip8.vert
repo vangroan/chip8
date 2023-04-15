@@ -1,11 +1,11 @@
 #version 330
 
-layout(location = 0) in vec4 point;
+layout(location = 0) in vec2 point;
 layout(location = 1) in float alpha;
 
+out float state;
+
 void main() {
-    if (alpha < 0.5) {
-        discard;
-    }
-    gl_Position = vec4();
+    state = alpha;
+    gl_Position = vec4(point, 0, 0);
 }
