@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 use std::rc::Rc;
 
+use glow::HasContext;
 use glutin::config::Config as GlutinConfig;
 use glutin::config::ConfigTemplateBuilder;
 use glutin::context::GlProfile;
@@ -197,6 +198,12 @@ impl WindowContext {
             }))
         };
 
+        unsafe {
+            let gl = gl.as_ref();
+            gl.enable(glow::DEBUG_OUTPUT);
+            gl.debug_message_callback(debug_message_callback);
+        }
+
         Self {
             window,
             gl_context,
@@ -266,5 +273,13 @@ impl WindowContext {
             );
             // TODO: Resize OpenGL viewport.
         }
+    }
+}
+
+fn debug_message_callback(source: u32, ty: u32, id: u32, severity: u32, message: &str) {
+    if ty == glow::DEBUG_TYPE_ERROR {
+        log::error!("OpenGL error 0x{ty:04x} 0x{severity:x}: {message}");
+    } else {
+        log::warn!("OpenGL 0x{ty:04x} 0x{severity:x}: {message}");
     }
 }

@@ -3,16 +3,133 @@ use std::rc::Rc;
 
 use glow::{Context as GlowContext, HasContext};
 
+macro_rules! gl_error {
+    ($gl:expr) => {
+        #[cfg(debug_assertions)]
+        {
+            let line = line!();
+            let file = file!();
+            // type assert
+            let _: &glow::Context = &$gl;
+            let mut has_error = false;
+            loop {
+                let err = $gl.get_error();
+                if err == glow::NO_ERROR {
+                    break;
+                }
+                has_error = true;
+                log::error!("OpenGL error [{file}:{line}]: 0x{err:04x}");
+            }
+            if has_error {
+                panic!("OpenGL Errors. See logs.");
+            }
+        }
+    };
+}
+
 pub struct Render {
     /// The interface to the loaded OpenGL function.
     gl: Rc<GlowContext>,
     info: OpenGLInfo,
+    framebuffer: Framebuffer,
 }
 
 impl Render {
     pub fn new(gl: Rc<GlowContext>) -> Self {
         let info = OpenGLInfo::new(gl.as_ref());
-        Self { gl, info }
+        let framebuffer = Self::create_framebuffer(gl.as_ref());
+        Self {
+            gl,
+            info,
+            framebuffer,
+        }
+    }
+
+    fn create_framebuffer(gl: &GlowContext) -> Framebuffer {
+        log::debug!("creating framebuffer");
+        let width = 800;
+        let height = 600;
+
+        unsafe {
+            let fbo = gl.create_framebuffer().unwrap();
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+            gl_error!(gl);
+
+            // ----------------------------------------------------------------
+            // Colour Attachment
+            let tex = gl.create_texture().unwrap();
+            gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+            // gl.bind_texture(glow::TEXTURE_2D, None);
+
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA8 as i32,
+                width,
+                height,
+                0,
+                glow::RGB,
+                glow::UNSIGNED_BYTE,
+                None,
+            );
+            gl_error!(gl);
+
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_WRAP_S,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_WRAP_T,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl_error!(gl);
+
+            // ----------------------------------------------------------------
+            // Depth and Stencil
+            let rbo = gl.create_renderbuffer().unwrap();
+            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(rbo));
+            gl.renderbuffer_storage(glow::RENDERBUFFER, glow::DEPTH24_STENCIL8, width, height);
+            gl.bind_renderbuffer(glow::RENDERBUFFER, None);
+            gl_error!(gl);
+
+            // ----------------------------------------------------------------
+            // Attach
+            gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(tex),
+                0,
+            );
+            gl.framebuffer_renderbuffer(
+                glow::FRAMEBUFFER,
+                glow::DEPTH_STENCIL_ATTACHMENT,
+                glow::RENDERBUFFER,
+                Some(rbo),
+            );
+            assert!(
+                gl.check_framebuffer_status(glow::FRAMEBUFFER) == glow::FRAMEBUFFER_COMPLETE,
+                "framebuffer is not complete"
+            );
+            gl_error!(gl);
+
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+
+            Framebuffer { fbo, tex, rbo }
+        }
     }
 
     fn _create_buffers(_gl: &GlowContext) {
@@ -29,6 +146,23 @@ impl Render {
     pub fn opengl_info(&self) -> &OpenGLInfo {
         &self.info
     }
+}
+
+impl Drop for Render {
+    fn drop(&mut self) {
+        let gl = self.gl.as_ref();
+
+        unsafe {
+            log::debug!("deleting frame buffer: {:?}", self.framebuffer.fbo);
+            gl.delete_framebuffer(self.framebuffer.fbo);
+        }
+    }
+}
+
+struct Framebuffer {
+    fbo: glow::NativeFramebuffer,
+    tex: glow::Texture,
+    rbo: glow::Renderbuffer,
 }
 
 pub struct OpenGLInfo {
