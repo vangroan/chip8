@@ -187,8 +187,6 @@ impl InputMap {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     #[test]
     fn test_actions() {}
 }

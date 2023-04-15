@@ -2,7 +2,7 @@ use std::error::Error;
 
 #[macro_use]
 extern crate slog;
-use chip8_win::{Chip8App, InputMap};
+use chip8_win::{Chip8App, InputMap, WindowContext};
 use log::{error, info};
 use slog::Drain;
 
@@ -23,7 +23,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Event loop can only be created once per process.
     let mut event_loop = Chip8App::create_event_loop();
-    let mut app = Chip8App::new(&event_loop, input_map)?;
+    let window_ctx = WindowContext::new(&event_loop);
+    let mut app = Chip8App::from_window(window_ctx, input_map);
 
     app.load_rom("chip8/programs/maze")?;
 

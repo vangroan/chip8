@@ -1,28 +1,21 @@
 use std::fmt;
+use std::rc::Rc;
 
 use glow::{Context as GlowContext, HasContext};
-use glutin::display::Display;
-use glutin::prelude::GlDisplay;
 
 pub struct Render {
     /// The interface to the loaded OpenGL function.
-    gl: GlowContext,
+    gl: Rc<GlowContext>,
     info: OpenGLInfo,
 }
 
 impl Render {
-    pub fn new(gl_display: &Display) -> Self {
-        // Create glow context.
-        let gl = unsafe {
-            glow::Context::from_loader_function_cstr(|symbol| gl_display.get_proc_address(symbol))
-        };
-
-        let info = OpenGLInfo::new(&gl);
-
+    pub fn new(gl: Rc<GlowContext>) -> Self {
+        let info = OpenGLInfo::new(gl.as_ref());
         Self { gl, info }
     }
 
-    fn create_buffers(_gl: &GlowContext) {
+    fn _create_buffers(_gl: &GlowContext) {
         todo!("create vertex buffer and frame buffer")
     }
 

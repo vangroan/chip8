@@ -2,6 +2,7 @@ mod app;
 mod error;
 mod inputmap;
 mod render;
+mod window;
 
 /// Hardcoded input action names.
 pub(crate) mod actions {
@@ -17,4 +18,5 @@ pub use self::{
     app::Chip8App,
     error::{AppError, ErrorKind},
     inputmap::{InputKind, InputMap},
+    window::WindowContext,
 };
