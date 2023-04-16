@@ -13,6 +13,7 @@ use crate::{
     cpu::Chip8Cpu,
     devices::KeyCode,
     error::{Chip8Error, Chip8Result},
+    Chip8DisplayBuffer,
 };
 
 const INFINITE_LOOP_LIMIT: usize = 1000;
@@ -58,6 +59,10 @@ impl Chip8Vm {
         self.reset();
 
         Ok(())
+    }
+
+    pub fn display_buffer(&self) -> Chip8DisplayBuffer {
+        &self.cpu.display
     }
 }
 

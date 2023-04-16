@@ -271,7 +271,12 @@ impl WindowContext {
                 NonZeroU32::new(size.width).unwrap(),
                 NonZeroU32::new(size.height).unwrap(),
             );
-            // TODO: Resize OpenGL viewport.
+
+            // Resize OpenGL viewport.
+            unsafe {
+                self.gl
+                    .viewport(0, 0, size.width as i32, size.height as i32);
+            }
         }
     }
 }

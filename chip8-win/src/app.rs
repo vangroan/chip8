@@ -110,6 +110,8 @@ impl Chip8App {
                         self.render
                             .clear_window(29.0 / 255.0, 33.0 / 255.0, 40.0 / 255.0, 0.9);
 
+                        self.render.draw_chip8_display(self.vm.display_buffer());
+
                         self.window_ctx.swap_buffers().unwrap();
                     }
                 }

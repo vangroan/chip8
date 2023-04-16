@@ -4,6 +4,7 @@ use std::{fmt, marker::PhantomData};
 use chip8::constants::{DISPLAY_BUFFER_SIZE, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use chip8::Chip8DisplayBuffer;
 use glow::{Context as GlowContext, HasContext};
+use winit::dpi::PhysicalSize;
 
 macro_rules! gl_error {
     ($gl:expr) => {
@@ -73,6 +74,7 @@ impl Render {
         log::debug!("creating framebuffer");
         let width = 800;
         let height = 600;
+        let size = PhysicalSize::new(width, height).cast();
 
         unsafe {
             let fbo = gl.create_framebuffer().unwrap();
@@ -152,7 +154,12 @@ impl Render {
 
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
 
-            Framebuffer { fbo, tex, rbo }
+            Framebuffer {
+                size,
+                fbo,
+                tex,
+                rbo,
+            }
         }
     }
 
@@ -190,7 +197,16 @@ impl Render {
             gl.delete_shader(geom_shader);
             gl.delete_shader(frag_shader);
 
-            ShaderProgram(program)
+            // Determine uniform locations
+            let mut uniforms = vec![];
+            if let Some(u_color_loc) = gl.get_uniform_location(program, "u_Color") {
+                uniforms.push(("u_Color", u_color_loc));
+            }
+
+            ShaderProgram {
+                prog: program,
+                uniforms: uniforms.into_boxed_slice(),
+            }
         }
     }
 
@@ -276,7 +292,7 @@ impl Render {
             gl.bind_vertex_array(None);
 
             Chip8Display {
-                point: Box::new(points.clone()),
+                points: Box::new(points.clone()),
                 vertex_array: VertexArray {
                     vao,
                     vertex_buffer,
@@ -288,17 +304,31 @@ impl Render {
     }
 
     pub fn draw_chip8_display(&mut self, chip8_buf: Chip8DisplayBuffer) {
-        assert_eq!(chip8_buf.len(), self.chip8_display.point.len());
-        
+        assert_eq!(chip8_buf.len(), self.chip8_display.points.len());
+
         // Build points from given buffer
         for index in 0..chip8_buf.len() {
             let pixel_state = chip8_buf[index];
-            self.chip8_display.point[index].alpha = if pixel_state { 1.0 } else { 0.0 };
+            self.chip8_display.points[index].alpha = if pixel_state { 1.0 } else { 0.0 };
         }
 
         unsafe {
-        
-            todo!()
+            // TODO: Change to render to texture
+            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+
+            self.gl.use_program(Some(self.shader.prog));
+            self.gl
+                .bind_vertex_array(Some(self.chip8_display.vertex_array.vao));
+            let u_color_loc = self.shader.uniform_location("u_Color");
+            assert!(u_color_loc.is_some());
+            self.gl.uniform_4_f32(u_color_loc, 0.8, 0.9, 1.0, 1.0);
+
+            self.gl
+                .draw_arrays(glow::POINTS, 0, self.chip8_display.points.len() as i32);
+
+            self.gl.bind_vertex_array(None);
+            self.gl.use_program(None);
+            gl_error!(self.gl);
         }
     }
 
@@ -339,23 +369,36 @@ impl Drop for Render {
             log::debug!("deleting frame buffer: {:?}", self.framebuffer.fbo);
             gl.delete_framebuffer(self.framebuffer.fbo);
 
-            log::debug!("deleting shader program: {:?}", self.shader.0);
-            gl.delete_program(self.shader.0);
+            log::debug!("deleting shader program: {:?}", self.shader.prog);
+            gl.delete_program(self.shader.prog);
         }
     }
 }
 
 struct Framebuffer {
+    size: PhysicalSize<u32>,
     fbo: glow::NativeFramebuffer,
     tex: glow::Texture,
     rbo: glow::Renderbuffer,
 }
 
-struct ShaderProgram(glow::NativeProgram);
+struct ShaderProgram {
+    prog: glow::NativeProgram,
+    uniforms: Box<[(&'static str, glow::NativeUniformLocation)]>,
+}
+
+impl ShaderProgram {
+    fn uniform_location(&self, name: &str) -> Option<&glow::NativeUniformLocation> {
+        self.uniforms
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, l)| l)
+    }
+}
 
 /// Vertex points that represent the pixels on the Chip8 display.
 struct Chip8Display {
-    point: Box<[Point; DISPLAY_BUFFER_SIZE]>,
+    points: Box<[Point; DISPLAY_BUFFER_SIZE]>,
     vertex_array: VertexArray<Point>,
 }
 
