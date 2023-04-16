@@ -1,6 +1,8 @@
 //! CPU and memory state.
 use crate::{bytecode::*, constants::*};
 
+pub type Chip8DisplayBuffer<'a> = &'a [bool; DISPLAY_BUFFER_SIZE];
+
 /// Core state for a chip8 interpreter.
 #[allow(dead_code)]
 pub struct Chip8Cpu {

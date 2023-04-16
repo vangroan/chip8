@@ -1,7 +1,8 @@
-use std::fmt;
 use std::rc::Rc;
+use std::{fmt, marker::PhantomData};
 
 use chip8::constants::{DISPLAY_BUFFER_SIZE, DISPLAY_HEIGHT, DISPLAY_WIDTH};
+use chip8::Chip8DisplayBuffer;
 use glow::{Context as GlowContext, HasContext};
 
 macro_rules! gl_error {
@@ -48,6 +49,7 @@ pub struct Render {
     /// The interface to the loaded OpenGL function.
     gl: Rc<GlowContext>,
     info: OpenGLInfo,
+    chip8_display: Chip8Display,
     framebuffer: Framebuffer,
     shader: ShaderProgram,
 }
@@ -55,11 +57,13 @@ pub struct Render {
 impl Render {
     pub fn new(gl: Rc<GlowContext>) -> Self {
         let info = OpenGLInfo::new(gl.as_ref());
+        let chip8_display = Self::create_chip8_points(gl.as_ref());
         let framebuffer = Self::create_framebuffer(gl.as_ref());
         let shader = Self::compile_shaders(gl.as_ref());
         Self {
             gl,
             info,
+            chip8_display,
             framebuffer,
             shader,
         }
@@ -190,20 +194,112 @@ impl Render {
         }
     }
 
-    fn create_points(gl: &GlowContext) {
+    fn create_chip8_points(gl: &GlowContext) -> Chip8Display {
+        // Points describing the pixels on the Chip8 display
+        let points = &mut [Point::default(); DISPLAY_BUFFER_SIZE];
+        for y in 0..DISPLAY_HEIGHT {
+            for x in 0..DISPLAY_WIDTH {
+                points[x + y * DISPLAY_WIDTH] = Point {
+                    position: [x as f32, y as f32],
+                    alpha: 0.0,
+                    ..Point::default()
+                };
+            }
+        }
+
+        // Primitive type points, not triangles
+        let indices = &mut [0_u16; DISPLAY_BUFFER_SIZE];
+        for index in 0..indices.len() {
+            indices[index] = index as u16;
+        }
+
         unsafe {
-            let vertex_buf = gl.create_buffer().unwrap();
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buf));
-            gl.buffer_storage(
+            // ================================================================
+            // Vertex Array Object
+            let vao = gl.create_vertex_array().unwrap();
+            gl.bind_vertex_array(Some(vao));
+
+            // ================================================================
+            // Vertex Buffer OBject
+            let vertex_buffer = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
+            gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                (DISPLAY_BUFFER_SIZE * std::mem::size_of::<Point>()) as i32,
-                None,
+                bytemuck::cast_slice(points),
                 glow::DYNAMIC_DRAW,
             );
-            gl.bind_buffer(glow::ARRAY_BUFFER, None);
             gl_error!(gl);
+
+            // ----------------------------------------------------------------
+            // Vertex data is interleaved.
+            // Attribute layout positions are determined by shader.
+            // Positions
+            gl.enable_vertex_attrib_array(Point::POSITION_LOC);
+            gl.vertex_attrib_pointer_f32(
+                Point::POSITION_LOC,                 // Attribute location in shader program.
+                2,                                   // Size. Components per iteration.
+                glow::FLOAT,                         // Type to get from buffer.
+                false,                               // Normalize.
+                std::mem::size_of::<Point>() as i32, // Stride. Bytes to advance each iteration.
+                memoffset::offset_of!(Point, position) as i32, // Offset. Bytes from start of buffer.
+            );
+            gl_error!(gl);
+
+            // ----------------------------------------------------------------
+            // Chip8 Pixel Alpha
+            gl.enable_vertex_attrib_array(Point::ALPHA_LOC);
+            gl.vertex_attrib_pointer_f32(
+                Point::ALPHA_LOC,                           // Attribute location in shader program.
+                1,                                          // Size. Components per iteration.
+                glow::FLOAT,                                // Type to get from buffer.
+                false,                                      // Normalize.
+                std::mem::size_of::<Point>() as i32, // Stride. Bytes to advance each iteration.
+                memoffset::offset_of!(Point, alpha) as i32, // Offset. Bytes from start of buffer.
+            );
+            gl_error!(gl);
+
+            // ----------------------------------------------------------------
+            // Index Buffer
+            let index_buffer = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+            gl.buffer_data_u8_slice(
+                glow::ELEMENT_ARRAY_BUFFER,
+                bytemuck::cast_slice(indices),
+                glow::STATIC_DRAW,
+            );
+            gl_error!(gl);
+
+            // ----------------------------------------------------------------
+            // Unbind
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+            gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            gl.bind_vertex_array(None);
+
+            Chip8Display {
+                point: Box::new(points.clone()),
+                vertex_array: VertexArray {
+                    vao,
+                    vertex_buffer,
+                    index_buffer,
+                    _vertex: PhantomData,
+                },
+            }
         }
-        todo!("create vertex buffer and frame buffer")
+    }
+
+    pub fn draw_chip8_display(&mut self, chip8_buf: Chip8DisplayBuffer) {
+        assert_eq!(chip8_buf.len(), self.chip8_display.point.len());
+        
+        // Build points from given buffer
+        for index in 0..chip8_buf.len() {
+            let pixel_state = chip8_buf[index];
+            self.chip8_display.point[index].alpha = if pixel_state { 1.0 } else { 0.0 };
+        }
+
+        unsafe {
+        
+            todo!()
+        }
     }
 
     pub fn clear_window(&mut self, red: f32, green: f32, blue: f32, alpha: f32) {
@@ -223,6 +319,17 @@ impl Drop for Render {
         let gl = self.gl.as_ref();
 
         unsafe {
+            let vertex_array = &self.chip8_display.vertex_array;
+
+            log::debug!("deleting vertex buffer: {:?}", vertex_array.vertex_buffer);
+            gl.delete_buffer(vertex_array.vertex_buffer);
+
+            log::debug!("deleting index buffer: {:?}", vertex_array.index_buffer);
+            gl.delete_buffer(vertex_array.index_buffer);
+
+            log::debug!("deleting vertex array: {:?}", vertex_array.vao);
+            gl.delete_vertex_array(vertex_array.vao);
+
             log::debug!("deleting render texture: {:?}", self.framebuffer.tex);
             gl.delete_texture(self.framebuffer.tex);
 
@@ -246,12 +353,30 @@ struct Framebuffer {
 
 struct ShaderProgram(glow::NativeProgram);
 
-#[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
+/// Vertex points that represent the pixels on the Chip8 display.
+struct Chip8Display {
+    point: Box<[Point; DISPLAY_BUFFER_SIZE]>,
+    vertex_array: VertexArray<Point>,
+}
+
+struct VertexArray<T> {
+    vao: glow::NativeVertexArray,
+    vertex_buffer: glow::NativeBuffer,
+    index_buffer: glow::NativeBuffer,
+    _vertex: PhantomData<T>,
+}
+
+#[derive(Default, bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
 #[repr(C)]
 struct Point {
     position: [f32; 2],
     alpha: f32,
     _pad: u32,
+}
+
+impl Point {
+    const POSITION_LOC: u32 = 0;
+    const ALPHA_LOC: u32 = 1;
 }
 
 pub struct OpenGLInfo {
