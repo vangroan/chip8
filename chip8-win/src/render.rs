@@ -52,21 +52,18 @@ pub struct Render {
     info: OpenGLInfo,
     chip8_display: Chip8Display,
     framebuffer: Framebuffer,
-    shader: ShaderProgram,
 }
 
 impl Render {
     pub fn new(gl: Rc<GlowContext>) -> Self {
         let info = OpenGLInfo::new(gl.as_ref());
-        let chip8_display = Self::create_chip8_points(gl.as_ref());
+        let chip8_display = Self::create_chip8_display(gl.as_ref());
         let framebuffer = Self::create_framebuffer(gl.as_ref());
-        let shader = Self::compile_shaders(gl.as_ref());
         Self {
             gl,
             info,
             chip8_display,
             framebuffer,
-            shader,
         }
     }
 
@@ -167,17 +164,17 @@ impl Render {
         log::debug!("compiling shaders");
         unsafe {
             let vert_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
-            gl.shader_source(vert_shader, include_str!("shader_chip8.vert"));
+            gl.shader_source(vert_shader, include_str!("shaders/chip8.vert"));
             gl.compile_shader(vert_shader);
             shader_error!(gl, vert_shader, "vertex shader");
 
             let geom_shader = gl.create_shader(glow::GEOMETRY_SHADER).unwrap();
-            gl.shader_source(geom_shader, include_str!("shader_chip8.geom"));
+            gl.shader_source(geom_shader, include_str!("shaders/chip8.geom"));
             gl.compile_shader(geom_shader);
             shader_error!(gl, vert_shader, "geometry shader");
 
             let frag_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
-            gl.shader_source(frag_shader, include_str!("shader_chip8.frag"));
+            gl.shader_source(frag_shader, include_str!("shaders/chip8.frag"));
             gl.compile_shader(frag_shader);
             shader_error!(gl, vert_shader, "fragment shader");
 
@@ -210,7 +207,9 @@ impl Render {
         }
     }
 
-    fn create_chip8_points(gl: &GlowContext) -> Chip8Display {
+    fn create_chip8_display(gl: &GlowContext) -> Chip8Display {
+        let shader = Self::compile_shaders(gl);
+
         // Points describing the pixels on the Chip8 display
         let points = &mut [Point::default(); DISPLAY_BUFFER_SIZE];
         for y in 0..DISPLAY_HEIGHT {
@@ -236,7 +235,7 @@ impl Render {
             gl.bind_vertex_array(Some(vao));
 
             // ================================================================
-            // Vertex Buffer OBject
+            // Vertex Buffer Object
             let vertex_buffer = gl.create_buffer().unwrap();
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
             gl.buffer_data_u8_slice(
@@ -285,13 +284,14 @@ impl Render {
             );
             gl_error!(gl);
 
-            // ----------------------------------------------------------------
+            // ================================================================
             // Unbind
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
             gl.bind_buffer(glow::ARRAY_BUFFER, None);
             gl.bind_vertex_array(None);
 
             Chip8Display {
+                shader,
                 points: Box::new(points.clone()),
                 vertex_array: VertexArray {
                     vao,
@@ -304,32 +304,53 @@ impl Render {
     }
 
     pub fn draw_chip8_display(&mut self, chip8_buf: Chip8DisplayBuffer) {
-        assert_eq!(chip8_buf.len(), self.chip8_display.points.len());
+        self.chip8_display.copy_points(chip8_buf);
+        self.chip8_display.draw(&self.gl);
+        // assert_eq!(chip8_buf.len(), self.chip8_display.points.len());
 
-        // Build points from given buffer
-        for index in 0..chip8_buf.len() {
-            let pixel_state = chip8_buf[index];
-            self.chip8_display.points[index].alpha = if pixel_state { 1.0 } else { 0.0 };
-        }
+        // // Build points from given buffer
+        // for index in 0..chip8_buf.len() {
+        //     let pixel_state = chip8_buf[index];
+        //     self.chip8_display.points[index].alpha = if pixel_state { 1.0 } else { 0.0 };
+        // }
 
-        unsafe {
-            // TODO: Change to render to texture
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        // unsafe {
+        //     self.gl.disable(glow::CULL_FACE);
 
-            self.gl.use_program(Some(self.shader.prog));
-            self.gl
-                .bind_vertex_array(Some(self.chip8_display.vertex_array.vao));
-            let u_color_loc = self.shader.uniform_location("u_Color");
-            assert!(u_color_loc.is_some());
-            self.gl.uniform_4_f32(u_color_loc, 0.8, 0.9, 1.0, 1.0);
+        //     // TODO: Change to render to texture
+        //     self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
 
-            self.gl
-                .draw_arrays(glow::POINTS, 0, self.chip8_display.points.len() as i32);
+        //     self.gl.use_program(Some(self.shader.prog));
+        //     self.gl
+        //         .bind_vertex_array(Some(self.chip8_display.vertex_array.vao));
+        //     self.gl.bind_buffer(
+        //         glow::ARRAY_BUFFER,
+        //         Some(self.chip8_display.vertex_array.vertex_buffer),
+        //     );
+        //     // Upload vertex data
+        //     self.gl.buffer_sub_data_u8_slice(
+        //         glow::ARRAY_BUFFER,
+        //         0,
+        //         bytemuck::cast_slice(self.chip8_display.points.as_slice()),
+        //     );
+        //     let u_color_loc = self.shader.uniform_location("u_Color");
+        //     assert!(u_color_loc.is_some());
+        //     self.gl.uniform_4_f32(u_color_loc, 0.8, 0.9, 1.0, 1.0);
 
-            self.gl.bind_vertex_array(None);
-            self.gl.use_program(None);
-            gl_error!(self.gl);
-        }
+        //     // self.gl
+        //     //     .draw_arrays(glow::POINTS, 0, self.chip8_display.points.len() as i32);
+        //     self.gl.draw_elements(
+        //         glow::POINTS,
+        //         self.chip8_display.points.len() as i32,
+        //         glow::UNSIGNED_SHORT,
+        //         0,
+        //     );
+
+        //     self.gl.bind_vertex_array(None);
+        //     self.gl.bind_buffer(glow::ARRAY_BUFFER, None);
+        //     self.gl.use_program(None);
+        //     gl_error!(self.gl);
+        // }
     }
 
     pub fn clear_window(&mut self, red: f32, green: f32, blue: f32, alpha: f32) {
@@ -349,7 +370,11 @@ impl Drop for Render {
         let gl = self.gl.as_ref();
 
         unsafe {
-            let vertex_array = &self.chip8_display.vertex_array;
+            let Chip8Display {
+                shader,
+                vertex_array,
+                ..
+            } = &self.chip8_display;
 
             log::debug!("deleting vertex buffer: {:?}", vertex_array.vertex_buffer);
             gl.delete_buffer(vertex_array.vertex_buffer);
@@ -360,6 +385,9 @@ impl Drop for Render {
             log::debug!("deleting vertex array: {:?}", vertex_array.vao);
             gl.delete_vertex_array(vertex_array.vao);
 
+            log::debug!("deleting shader program: {:?}", shader.prog);
+            gl.delete_program(shader.prog);
+
             log::debug!("deleting render texture: {:?}", self.framebuffer.tex);
             gl.delete_texture(self.framebuffer.tex);
 
@@ -368,11 +396,65 @@ impl Drop for Render {
 
             log::debug!("deleting frame buffer: {:?}", self.framebuffer.fbo);
             gl.delete_framebuffer(self.framebuffer.fbo);
-
-            log::debug!("deleting shader program: {:?}", self.shader.prog);
-            gl.delete_program(self.shader.prog);
         }
     }
+}
+
+#[rustfmt::skip]
+pub const DEMO_DISPLAY: &[u32; 64] = &[
+    0xFF008888, 0x888888FF,  // 0
+    0x81444444, 0x44444481,  // 1
+    0x99282222, 0x222222BD,  // 2
+    0xBD101111, 0x111110A5,  // 3
+    0xBD288888, 0x888888A5,  // 4
+    0x99444444, 0x444444BD,  // 5
+    0x81442222, 0x22222281,  // 6
+    0xFF001111, 0x111110FF,  // 7
+    0x00000000, 0x00000000,  // 8
+    0x22000000, 0x00000000,  // 9
+    0x22000000, 0x00000000,  // 10
+    0x14000000, 0x00000000,  // 11
+    0x08000000, 0x00000000,  // 12
+    0x08000000, 0x00000000,  // 13
+    0x08000000, 0x00000000,  // 14
+    0x00000000, 0x00000000,  // 15
+    0x00000000, 0x00000000,  // 16
+    0x00000000, 0x00000000,  // 17
+    0x00000000, 0x00000000,  // 18
+    0x00000000, 0x00000000,  // 19
+    0x00000000, 0x00000000,  // 20
+    0x00000000, 0x00000000,  // 21
+    0x00000000, 0x00000000,  // 22
+    0x00000000, 0x00000000,  // 23
+    0xFF000000, 0x000000FF,  // 24
+    0x81000000, 0x00000081,  // 25
+    0x99000000, 0x000000BD,  // 26
+    0xBD000000, 0x000000BD,  // 27
+    0xBD000000, 0x000000BD,  // 28
+    0x99000000, 0x000000BD,  // 29
+    0x81000000, 0x00000081,  // 30
+    0xFF000000, 0x000000FF,  // 31
+];
+
+#[allow(dead_code)]
+pub fn demo_display_pattern() -> Box<[bool; DISPLAY_BUFFER_SIZE]> {
+    let buf = &mut [false; DISPLAY_BUFFER_SIZE];
+    const U32_BITS: usize = u32::BITS as usize;
+
+    for y in 0..DISPLAY_HEIGHT {
+        for x in 0..DISPLAY_WIDTH {
+            let dst_index = x + y * DISPLAY_WIDTH;
+            let index_a = dst_index / U32_BITS;
+            let index_b = U32_BITS - 1 - (dst_index % U32_BITS);
+            // print!("|{dst_index} {index_a} {index_b}|");
+            let bit = (DEMO_DISPLAY[index_a] >> index_b) & 1;
+            // print!("{}", if bit == 1 { '#' } else { '.' });
+            buf[dst_index] = bit == 1;
+        }
+        println!();
+    }
+
+    Box::new(buf.clone())
 }
 
 struct Framebuffer {
@@ -380,6 +462,12 @@ struct Framebuffer {
     fbo: glow::NativeFramebuffer,
     tex: glow::Texture,
     rbo: glow::Renderbuffer,
+}
+
+impl Framebuffer {
+    fn new(_gl: &GlowContext, _size: PhysicalSize<u32>) -> Self {
+        todo!("framebuffer as render texture target")
+    }
 }
 
 struct ShaderProgram {
@@ -398,8 +486,59 @@ impl ShaderProgram {
 
 /// Vertex points that represent the pixels on the Chip8 display.
 struct Chip8Display {
+    shader: ShaderProgram,
     points: Box<[Point; DISPLAY_BUFFER_SIZE]>,
     vertex_array: VertexArray<Point>,
+}
+
+impl Chip8Display {
+    fn copy_points(&mut self, chip8_buf: Chip8DisplayBuffer) {
+        assert_eq!(chip8_buf.len(), self.points.len());
+
+        // Build points from given buffer
+        for index in 0..chip8_buf.len() {
+            let pixel_state = chip8_buf[index];
+            self.points[index].alpha = if pixel_state { 1.0 } else { 0.0 };
+        }
+    }
+
+    fn draw(&self, gl: &GlowContext) {
+        let Self {
+            shader,
+            points,
+            vertex_array,
+        } = self;
+
+        unsafe {
+            gl.disable(glow::CULL_FACE);
+            gl.enable(glow::BLEND);
+
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+
+            gl.use_program(Some(shader.prog));
+            gl.bind_vertex_array(Some(vertex_array.vao));
+
+            // Upload vertex data
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_array.vertex_buffer));
+            gl.buffer_sub_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                0,
+                bytemuck::cast_slice(points.as_slice()),
+            );
+
+            let u_color_loc = shader.uniform_location("u_Color");
+            assert!(u_color_loc.is_some());
+            gl.uniform_4_f32(u_color_loc, 0.8, 0.9, 1.0, 1.0);
+
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(vertex_array.index_buffer));
+            gl.draw_elements(glow::POINTS, points.len() as i32, glow::UNSIGNED_SHORT, 0);
+
+            gl.bind_vertex_array(None);
+            gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            gl.use_program(None);
+            gl_error!(gl);
+        }
+    }
 }
 
 struct VertexArray<T> {
@@ -455,5 +594,15 @@ impl fmt::Display for OpenGLInfo {
         writeln!(f, "Vendor: {vendor}")?;
         writeln!(f, "Shading Language: {shading_lang}")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_display_pattern() {
+        super::demo_display_pattern();
     }
 }

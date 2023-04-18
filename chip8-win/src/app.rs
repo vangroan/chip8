@@ -9,7 +9,11 @@ use winit::{
 };
 
 use crate::{
-    actions::*, error::AppError, render::Render, window::WindowContext, EventLoop, InputMap,
+    actions::*,
+    error::AppError,
+    render::{demo_display_pattern, Render},
+    window::WindowContext,
+    EventLoop, InputMap,
 };
 
 /// Chip8 Application
@@ -63,6 +67,7 @@ impl Chip8App {
 impl Chip8App {
     pub fn run(&mut self, event_loop: &mut EventLoop) -> Result<(), AppError> {
         let main_window_id = self.window_ctx.window.id();
+        let test_pattern = demo_display_pattern();
 
         event_loop.run_return(|event, _, control_flow| {
             control_flow.set_poll();
@@ -110,7 +115,8 @@ impl Chip8App {
                         self.render
                             .clear_window(29.0 / 255.0, 33.0 / 255.0, 40.0 / 255.0, 0.9);
 
-                        self.render.draw_chip8_display(self.vm.display_buffer());
+                        // self.render.draw_chip8_display(self.vm.display_buffer());
+                        self.render.draw_chip8_display(&test_pattern);
 
                         self.window_ctx.swap_buffers().unwrap();
                     }

@@ -4,11 +4,12 @@
 uniform vec4 u_Color;
 
 in float state;
-out vec4 FragColor;
+
+out vec4 frag_color;
 
 void main() {
-    if (state < 0.5) {
+    if (state < 0.1) {
         discard;
     }
-    FragColor = u_Color;
+    frag_color = u_Color * state;
 }
