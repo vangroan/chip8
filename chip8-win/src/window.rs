@@ -2,19 +2,14 @@ use std::num::NonZeroU32;
 use std::rc::Rc;
 
 use glow::HasContext;
-use glutin::config::Config as GlutinConfig;
-use glutin::config::ConfigTemplateBuilder;
-use glutin::context::GlProfile;
-use glutin::context::{ContextApi, ContextAttributesBuilder, Version as GlVersion};
+use glutin::config::{Config as GlutinConfig, ConfigTemplateBuilder};
+use glutin::context::{ContextApi, ContextAttributesBuilder, GlProfile, Version as GlVersion};
 use glutin::display::GetGlDisplay;
 use glutin::prelude::*;
-use glutin::surface::GlSurface;
-use glutin::surface::SwapInterval;
-use glutin::surface::WindowSurface;
+use glutin::surface::{GlSurface, SwapInterval, WindowSurface};
 use glutin_winit::GlWindow;
 use raw_window_handle::HasRawWindowHandle;
-use winit::dpi::LogicalSize;
-use winit::dpi::PhysicalSize;
+use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::window::WindowBuilder;
 
 use crate::EventLoop;
