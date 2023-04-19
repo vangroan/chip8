@@ -199,6 +199,11 @@ impl Render {
             if let Some(u_color_loc) = gl.get_uniform_location(program, "u_Color") {
                 uniforms.push(("u_Color", u_color_loc));
             }
+            if let Some(u_matrix_loc) = gl.get_uniform_location(program, "u_Matrix") {
+                uniforms.push(("u_Matrix", u_matrix_loc));
+            } else {
+                log::warn!("could not get location of uniform 'u_Matrix'");
+            }
 
             ShaderProgram {
                 prog: program,
@@ -290,6 +295,10 @@ impl Render {
             gl.bind_buffer(glow::ARRAY_BUFFER, None);
             gl.bind_vertex_array(None);
 
+            // ================================================================
+            // Chip8 Matrix
+            let matrix = flatten_matrix(&Chip8Display::matrix());
+
             Chip8Display {
                 shader,
                 points: Box::new(points.clone()),
@@ -299,6 +308,7 @@ impl Render {
                     index_buffer,
                     _vertex: PhantomData,
                 },
+                matrix,
             }
         }
     }
@@ -306,51 +316,6 @@ impl Render {
     pub fn draw_chip8_display(&mut self, chip8_buf: Chip8DisplayBuffer) {
         self.chip8_display.copy_points(chip8_buf);
         self.chip8_display.draw(&self.gl);
-        // assert_eq!(chip8_buf.len(), self.chip8_display.points.len());
-
-        // // Build points from given buffer
-        // for index in 0..chip8_buf.len() {
-        //     let pixel_state = chip8_buf[index];
-        //     self.chip8_display.points[index].alpha = if pixel_state { 1.0 } else { 0.0 };
-        // }
-
-        // unsafe {
-        //     self.gl.disable(glow::CULL_FACE);
-
-        //     // TODO: Change to render to texture
-        //     self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-
-        //     self.gl.use_program(Some(self.shader.prog));
-        //     self.gl
-        //         .bind_vertex_array(Some(self.chip8_display.vertex_array.vao));
-        //     self.gl.bind_buffer(
-        //         glow::ARRAY_BUFFER,
-        //         Some(self.chip8_display.vertex_array.vertex_buffer),
-        //     );
-        //     // Upload vertex data
-        //     self.gl.buffer_sub_data_u8_slice(
-        //         glow::ARRAY_BUFFER,
-        //         0,
-        //         bytemuck::cast_slice(self.chip8_display.points.as_slice()),
-        //     );
-        //     let u_color_loc = self.shader.uniform_location("u_Color");
-        //     assert!(u_color_loc.is_some());
-        //     self.gl.uniform_4_f32(u_color_loc, 0.8, 0.9, 1.0, 1.0);
-
-        //     // self.gl
-        //     //     .draw_arrays(glow::POINTS, 0, self.chip8_display.points.len() as i32);
-        //     self.gl.draw_elements(
-        //         glow::POINTS,
-        //         self.chip8_display.points.len() as i32,
-        //         glow::UNSIGNED_SHORT,
-        //         0,
-        //     );
-
-        //     self.gl.bind_vertex_array(None);
-        //     self.gl.bind_buffer(glow::ARRAY_BUFFER, None);
-        //     self.gl.use_program(None);
-        //     gl_error!(self.gl);
-        // }
     }
 
     pub fn clear_window(&mut self, red: f32, green: f32, blue: f32, alpha: f32) {
@@ -489,6 +454,7 @@ struct Chip8Display {
     shader: ShaderProgram,
     points: Box<[Point; DISPLAY_BUFFER_SIZE]>,
     vertex_array: VertexArray<Point>,
+    matrix: [f32; 16],
 }
 
 impl Chip8Display {
@@ -507,6 +473,7 @@ impl Chip8Display {
             shader,
             points,
             vertex_array,
+            matrix,
         } = self;
 
         unsafe {
@@ -530,6 +497,15 @@ impl Chip8Display {
             assert!(u_color_loc.is_some());
             gl.uniform_4_f32(u_color_loc, 0.8, 0.9, 1.0, 1.0);
 
+            let u_matrix_loc = shader.uniform_location("u_Matrix");
+            assert!(u_matrix_loc.is_some());
+            assert_eq!(matrix.len(), 16);
+            gl.uniform_matrix_4_f32_slice(
+                u_matrix_loc,
+                true,
+                bytemuck::cast_slice(matrix.as_slice()),
+            );
+
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(vertex_array.index_buffer));
             gl.draw_elements(glow::POINTS, points.len() as i32, glow::UNSIGNED_SHORT, 0);
 
@@ -538,6 +514,42 @@ impl Chip8Display {
             gl.use_program(None);
             gl_error!(gl);
         }
+    }
+
+    /// Create a view matrix from Chip8 display coordinates to OpenGL clip space.
+    #[allow(unused_assignments)]
+    #[rustfmt::skip]
+    fn matrix() -> [[f32; 4]; 4] {
+        let mut sx: f32 = 1.0;
+        let mut sy: f32 = 1.0;
+        let mut tx: f32 = 0.0;
+        let mut ty: f32 = 0.0;
+
+        // Normalize the vertex position from chip8 pixels to 0.0 to 1.0
+        //
+        // chip8_resolution = vec2(64, 32)
+        // norm_position = 1 / chip8_resolution
+        sx = 1.0 / DISPLAY_WIDTH as f32;
+        sy = 1.0 / DISPLAY_HEIGHT as f32;
+
+        // Convert from normalized position (0,+1) to clip space is (-1,+1)
+        //
+        // clip_position = norm_position * 2 - 1
+        sx = sx * 2.0;
+        sy = sy * 2.0;
+        tx = -1.0;
+        ty = -1.0;
+
+        // OpenGL y points upwards, for chip8 y points downwards.
+        sy = -sy;
+        ty = -ty; // translate after scale
+
+        [
+            [sx,  0.0, 0.0,  tx],
+            [0.0,  sy, 0.0,  ty],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
     }
 }
 
@@ -595,6 +607,16 @@ impl fmt::Display for OpenGLInfo {
         writeln!(f, "Shading Language: {shading_lang}")?;
         Ok(())
     }
+}
+
+#[rustfmt::skip]
+fn flatten_matrix(m: &[[f32; 4]; 4]) -> [f32; 16] {
+    [
+        m[0][0], m[0][1], m[0][2], m[0][3],
+        m[1][0], m[1][1], m[1][2], m[1][3],
+        m[2][0], m[2][1], m[2][2], m[2][3],
+        m[3][0], m[3][1], m[3][2], m[3][3],
+    ]
 }
 
 #[cfg(test)]
