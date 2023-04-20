@@ -324,6 +324,7 @@ impl Render {
     ///
     /// Useful for checking the correctness of the
     /// render pipeline and shader program.
+    #[allow(dead_code)]
     pub fn draw_demo_pattern(&mut self) {
         self.chip8_display.copy_points(&self.demo_pattern);
         self.chip8_display.draw(&self.gl);
