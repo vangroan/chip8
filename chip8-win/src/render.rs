@@ -52,6 +52,7 @@ pub struct Render {
     info: OpenGLInfo,
     chip8_display: Chip8Display,
     framebuffer: Framebuffer,
+    demo_pattern: Box<[bool; DISPLAY_BUFFER_SIZE]>,
 }
 
 impl Render {
@@ -64,6 +65,7 @@ impl Render {
             info,
             chip8_display,
             framebuffer,
+            demo_pattern: demo_display_pattern(),
         }
     }
 
@@ -318,6 +320,15 @@ impl Render {
         self.chip8_display.draw(&self.gl);
     }
 
+    /// Draw a test pattern.
+    ///
+    /// Useful for checking the correctness of the
+    /// render pipeline and shader program.
+    pub fn draw_demo_pattern(&mut self) {
+        self.chip8_display.copy_points(&self.demo_pattern);
+        self.chip8_display.draw(&self.gl);
+    }
+
     pub fn clear_window(&mut self, red: f32, green: f32, blue: f32, alpha: f32) {
         unsafe {
             self.gl.clear_color(red, green, blue, alpha);
@@ -532,7 +543,7 @@ impl Chip8Display {
         sx = 1.0 / DISPLAY_WIDTH as f32;
         sy = 1.0 / DISPLAY_HEIGHT as f32;
 
-        // Convert from normalized position (0,+1) to clip space is (-1,+1)
+        // Convert from normalized position (0,+1) to clip space (-1,+1)
         //
         // clip_position = norm_position * 2 - 1
         sx = sx * 2.0;
