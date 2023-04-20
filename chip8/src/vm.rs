@@ -72,6 +72,17 @@ pub enum Flow {
     Ok,
     Error,
     Interrupt,
+    /// Program counter has jumped to a new address.
+    ///
+    /// This is useful for the caller to avoid being
+    /// blocked on infinite or long running loops.
+    ///
+    /// This is returned when the interpreter encounters:
+    ///
+    /// - 1nnn (`JP addr`)
+    /// - 2nnn (`CALL addr`)
+    /// - 00EE (`RET`)
+    Jump,
     Draw,
     Sound,
     /// Wait for a keypress.
@@ -221,11 +232,12 @@ impl Chip8Vm {
 
                     self.cpu.pc = nnn as usize;
 
-                    // TODO: Remove infinite loop guard
-                    if self.guard_infinite() {
-                        self.cpu.set_error("infinite loop guard");
-                        control_flow = Flow::Error;
-                    }
+                    // // TODO: Remove infinite loop guard
+                    // if self.guard_infinite() {
+                    //     self.cpu.set_error("infinite loop guard");
+                    //     control_flow = Flow::Error;
+                    // }
+                    control_flow = Flow::Jump;
                 }
                 // 2NNN (CALL addr)
                 //
@@ -236,6 +248,8 @@ impl Chip8Vm {
                     self.cpu.sp += 1;
                     self.cpu.stack[self.cpu.sp] = self.cpu.pc as u16;
                     self.cpu.pc = nnn as usize;
+
+                    control_flow = Flow::Jump;
                 }
                 // 3XNN (SE Vx, byte)
                 //
@@ -517,6 +531,8 @@ impl Chip8Vm {
 
                 self.cpu.pc = self.cpu.stack[self.cpu.sp] as usize;
                 self.cpu.sp -= 1;
+
+                control_flow = Flow::Jump;
             }
             // ----------------------------------------------------------------
             // Ex9E (SKP Vx)

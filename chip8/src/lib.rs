@@ -14,7 +14,7 @@ pub use self::{
     devices::KeyCode,
     error::{Chip8Error, Chip8Result},
     vm::Hz,
-    vm::{Chip8Conf, Chip8Vm},
+    vm::{Chip8Conf, Chip8Vm, Flow},
 };
 
 /// Version of *this* implementation.

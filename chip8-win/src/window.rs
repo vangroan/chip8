@@ -33,7 +33,7 @@ impl WindowContext {
         // --------------------------------------------------------------------
         // Window
 
-        let inner_size = LogicalSize::new(640, 480);
+        let inner_size = LogicalSize::new(800, 400);
         let window_builder = WindowBuilder::new()
             .with_resizable(true)
             .with_inner_size(inner_size)

@@ -72,7 +72,7 @@ impl Render {
     fn create_framebuffer(gl: &GlowContext) -> Framebuffer {
         log::debug!("creating framebuffer");
         let width = 800;
-        let height = 600;
+        let height = 400;
         let size = PhysicalSize::new(width, height).cast();
 
         unsafe {

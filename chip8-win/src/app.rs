@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use chip8::prelude::*;
+use chip8::{prelude::*, Flow};
 use log::info;
 use winit::{
     event::{Event as EV, WindowEvent as WE},
@@ -94,15 +94,39 @@ impl Chip8App {
                         log::debug!("{s}");
                     }
 
-                    // TODO: graceful error handling
-                    self.vm.tick().unwrap();
-
-                    // Queue a RedrawRequested event.
+                    // Inner VM loop.
                     //
-                    // You only need to call this if you've determined that you need to redraw, in
-                    // applications which do not always need to. Applications that redraw continuously
-                    // can just render here instead.
-                    self.window_ctx.request_redraw();
+                    // The outer event loop, and inner VM loop, have to yield control
+                    // between each other cooperatively.
+                    //
+                    // 1. Process as many bytecode instructions as we can.
+                    // 2. Jumps can stall the VM in infinite or long running loops,
+                    //    blocking the event loop.
+                    // 3. V-sync blocks the main thread and can slow down the interpreter.
+                    'vm: loop {
+                        match self.vm.tick() {
+                            Ok(flow) => {
+                                match flow {
+                                    // Queue a RedrawRequested event.
+                                    //
+                                    // We only need to call this if we've determined that we need to redraw.
+                                    Flow::Draw => {
+                                        self.window_ctx.request_redraw();
+                                        break 'vm;
+                                    }
+                                    // Yield control back to outer loop.
+                                    Flow::Jump | Flow::KeyWait | Flow::Interrupt => {
+                                        break 'vm;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            Err(err) => {
+                                eprintln!("VM error: {err}")
+                                // TODO: graceful error reporting to user
+                            }
+                        }
+                    }
                 }
                 EV::RedrawRequested(_) => {
                     // Redraw the application.
@@ -110,8 +134,8 @@ impl Chip8App {
                         self.render
                             .clear_window(29.0 / 255.0, 33.0 / 255.0, 40.0 / 255.0, 0.9);
 
-                        // self.render.draw_chip8_display(self.vm.display_buffer());
-                        self.render.draw_demo_pattern();
+                        self.render.draw_chip8_display(self.vm.display_buffer());
+                        // self.render.draw_demo_pattern();
 
                         self.window_ctx.swap_buffers().unwrap();
                     }
