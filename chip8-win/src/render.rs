@@ -352,26 +352,9 @@ impl Drop for Render {
                 ..
             } = &self.chip8_display;
 
-            log::debug!("deleting vertex buffer: {:?}", vertex_array.vertex_buffer);
-            gl.delete_buffer(vertex_array.vertex_buffer);
-
-            log::debug!("deleting index buffer: {:?}", vertex_array.index_buffer);
-            gl.delete_buffer(vertex_array.index_buffer);
-
-            log::debug!("deleting vertex array: {:?}", vertex_array.vao);
-            gl.delete_vertex_array(vertex_array.vao);
-
-            log::debug!("deleting shader program: {:?}", shader.prog);
-            gl.delete_program(shader.prog);
-
-            log::debug!("deleting render texture: {:?}", self.framebuffer.tex);
-            gl.delete_texture(self.framebuffer.tex);
-
-            log::debug!("deleting render buffer: {:?}", self.framebuffer.rbo);
-            gl.delete_renderbuffer(self.framebuffer.rbo);
-
-            log::debug!("deleting frame buffer: {:?}", self.framebuffer.fbo);
-            gl.delete_framebuffer(self.framebuffer.fbo);
+            vertex_array.delete(gl);
+            shader.delete(gl);
+            self.framebuffer.delete(gl);
         }
     }
 }
@@ -444,6 +427,19 @@ impl Framebuffer {
     fn new(_gl: &GlowContext, _size: PhysicalSize<u32>) -> Self {
         todo!("framebuffer as render texture target")
     }
+
+    /// Delete inner resources.
+    ///
+    /// # Safety
+    ///
+    /// Attempting to use this resource after
+    /// deletion will result in an OpenGL error.
+    #[doc(hidden)]
+    unsafe fn delete(&self, gl: &GlowContext) {
+        gl.delete_texture(self.tex);
+        gl.delete_renderbuffer(self.rbo);
+        gl.delete_framebuffer(self.fbo);
+    }
 }
 
 struct ShaderProgram {
@@ -457,6 +453,17 @@ impl ShaderProgram {
             .iter()
             .find(|(n, _)| *n == name)
             .map(|(_, l)| l)
+    }
+
+    /// Delete inner resources.
+    ///
+    /// # Safety
+    ///
+    /// Attempting to use this resource after
+    /// deletion will result in an OpenGL error.
+    #[doc(hidden)]
+    unsafe fn delete(&self, gl: &GlowContext) {
+        gl.delete_program(self.prog);
     }
 }
 
@@ -569,6 +576,21 @@ struct VertexArray<T> {
     vertex_buffer: glow::NativeBuffer,
     index_buffer: glow::NativeBuffer,
     _vertex: PhantomData<T>,
+}
+
+impl<T> VertexArray<T> {
+    /// Delete inner resources.
+    ///
+    /// # Safety
+    ///
+    /// Attempting to use this resource after
+    /// deletion will result in an OpenGL error.
+    #[doc(hidden)]
+    unsafe fn delete(&self, gl: &GlowContext) {
+        gl.delete_buffer(self.vertex_buffer);
+        gl.delete_buffer(self.index_buffer);
+        gl.delete_vertex_array(self.vao);
+    }
 }
 
 #[derive(Default, bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
