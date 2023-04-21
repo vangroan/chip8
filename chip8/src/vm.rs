@@ -16,8 +16,6 @@ use crate::{
     Chip8DisplayBuffer,
 };
 
-const INFINITE_LOOP_LIMIT: usize = 1000;
-
 pub struct Chip8Vm {
     cpu: Chip8Cpu,
     clock: Clock,
@@ -114,13 +112,6 @@ impl From<Hz> for Duration {
 
 /// Interpreter
 impl Chip8Vm {
-    // FIXME: Currently we can't break out of the infinite loops that programs use.
-    fn guard_infinite(&mut self) -> bool {
-        self.loop_counter += 1;
-        self.loop_counter > INFINITE_LOOP_LIMIT;
-        false
-    }
-
     /// Sets the keyboard key input state.
     ///
     /// If the VM is waiting for keyboard input, the `key_wait` flag will
@@ -232,11 +223,6 @@ impl Chip8Vm {
 
                     self.cpu.pc = nnn as usize;
 
-                    // // TODO: Remove infinite loop guard
-                    // if self.guard_infinite() {
-                    //     self.cpu.set_error("infinite loop guard");
-                    //     control_flow = Flow::Error;
-                    // }
                     control_flow = Flow::Jump;
                 }
                 // 2NNN (CALL addr)

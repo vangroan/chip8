@@ -29,6 +29,7 @@ pub struct InputMap {
 struct InputInfo {
     chip8: Option<KeyCode>,
     action: Option<SmolStr>,
+    #[allow(dead_code)]
     keyboard_keys: Vec<VirtualKeyCode>,
 }
 

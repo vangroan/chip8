@@ -418,6 +418,7 @@ pub fn demo_display_pattern() -> Box<[bool; DISPLAY_BUFFER_SIZE]> {
 }
 
 struct Framebuffer {
+    #[allow(dead_code)]
     size: PhysicalSize<u32>,
     fbo: glow::NativeFramebuffer,
     tex: glow::Texture,
@@ -425,7 +426,7 @@ struct Framebuffer {
 }
 
 impl Framebuffer {
-    fn new(_gl: &GlowContext, _size: PhysicalSize<u32>) -> Self {
+    fn _new(_gl: &GlowContext, _size: PhysicalSize<u32>) -> Self {
         todo!("framebuffer as render texture target")
     }
 
@@ -651,14 +652,4 @@ fn flatten_matrix(m: &[[f32; 4]; 4]) -> [f32; 16] {
         m[2][0], m[2][1], m[2][2], m[2][3],
         m[3][0], m[3][1], m[3][2], m[3][3],
     ]
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_display_pattern() {
-        super::demo_display_pattern();
-    }
 }

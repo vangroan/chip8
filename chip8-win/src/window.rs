@@ -276,7 +276,7 @@ impl WindowContext {
     }
 }
 
-fn debug_message_callback(source: u32, ty: u32, id: u32, severity: u32, message: &str) {
+fn debug_message_callback(_source: u32, ty: u32, _id: u32, severity: u32, message: &str) {
     if ty == glow::DEBUG_TYPE_ERROR {
         log::error!("OpenGL error 0x{ty:04x} 0x{severity:x}: {message}");
     } else {

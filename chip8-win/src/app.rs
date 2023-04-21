@@ -130,7 +130,7 @@ impl Chip8App {
                 }
                 EV::RedrawRequested(_) => {
                     // Redraw the application.
-                    if let Ok(_) = self.window_ctx.make_context_current() {
+                    if self.window_ctx.make_context_current().is_ok() {
                         self.render
                             .clear_window(29.0 / 255.0, 33.0 / 255.0, 40.0 / 255.0, 0.9);
 
