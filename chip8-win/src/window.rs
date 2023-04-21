@@ -57,7 +57,7 @@ impl WindowContext {
         let (window, gl_config) = glutin_winit::DisplayBuilder::new()
             .with_preference(glutin_winit::ApiPrefence::FallbackEgl)
             .with_window_builder(Some(window_builder.clone()))
-            .build(&event_loop, template, |configs| {
+            .build(event_loop, template, |configs| {
                 // Find a config that supports transparency, and has the maximum number of samples.
                 let mut config: Option<GlutinConfig> = None;
 
@@ -240,14 +240,12 @@ impl WindowContext {
 
     /// Swaps the underlying back buffers when the surface is not single buffered.
     #[inline]
-    #[must_use]
     pub fn swap_buffers(&self) -> glutin::error::Result<()> {
         self.gl_surface.swap_buffers(&self.gl_context)
     }
 
     /// Make the underlying surface current on the calling thread.
     #[inline]
-    #[must_use]
     pub fn make_context_current(&self) -> glutin::error::Result<()> {
         self.gl_context.make_current(&self.gl_surface)
     }

@@ -231,8 +231,8 @@ impl Render {
 
         // Primitive type points, not triangles
         let indices = &mut [0_u16; DISPLAY_BUFFER_SIZE];
-        for index in 0..indices.len() {
-            indices[index] = index as u16;
+        for (index, item) in indices.iter_mut().enumerate() {
+            *item = index as u16;
         }
 
         unsafe {
@@ -303,7 +303,7 @@ impl Render {
 
             Chip8Display {
                 shader,
-                points: Box::new(points.clone()),
+                points: Box::new(*points),
                 vertex_array: VertexArray {
                     vao,
                     vertex_buffer,
@@ -414,7 +414,7 @@ pub fn demo_display_pattern() -> Box<[bool; DISPLAY_BUFFER_SIZE]> {
         println!();
     }
 
-    Box::new(buf.clone())
+    Box::new(*buf)
 }
 
 struct Framebuffer {
@@ -482,9 +482,8 @@ impl Chip8Display {
         assert_eq!(chip8_buf.len(), self.points.len());
 
         // Build points from given buffer
-        for index in 0..chip8_buf.len() {
-            let pixel_state = chip8_buf[index];
-            self.points[index].alpha = if pixel_state { 1.0 } else { 0.0 };
+        for (index, pixel_state) in chip8_buf.iter().enumerate() {
+            self.points[index].alpha = if *pixel_state { 1.0 } else { 0.0 };
         }
     }
 
@@ -555,8 +554,8 @@ impl Chip8Display {
         // Convert from normalized position (0,+1) to clip space (-1,+1)
         //
         // clip_position = norm_position * 2 - 1
-        sx = sx * 2.0;
-        sy = sy * 2.0;
+        sx *= 2.0;
+        sy *= 2.0;
         tx = -1.0;
         ty = -1.0;
 

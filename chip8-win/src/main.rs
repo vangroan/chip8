@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let logger = slog::Logger::root(drain, o!("version" => "0.5"));
 
     let _scope_guard = slog_scope::set_global_logger(logger);
-    let _log_guard = slog_stdlog::init_with_level(log::Level::Trace).unwrap();
+    slog_stdlog::init_with_level(log::Level::Trace).unwrap();
 
     info!("starting...");
 

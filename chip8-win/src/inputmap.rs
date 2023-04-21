@@ -39,7 +39,7 @@ impl From<InputDef> for InputInfo {
         Self {
             chip8: def.chip8,
             action: def.action,
-            keyboard_keys: def.keyboard_keys.unwrap_or_else(Vec::new),
+            keyboard_keys: def.keyboard_keys.unwrap_or_default(),
         }
     }
 }
@@ -120,10 +120,13 @@ impl InputMap {
             .map(|(_, index)| *index)
             .and_then(|index| self.actions.get(index))
             .and_then(|input_def| {
-                if let Some(key_code) = input_def.chip8 {
-                    Some(InputKind::Chip8(key_code.as_u8()))
-                } else if let Some(action_name) = &input_def.action {
-                    Some(InputKind::Action(action_name.clone()))
+                if input_def.chip8.is_some() {
+                    input_def
+                        .chip8
+                        .map(|key_code| key_code.as_u8())
+                        .map(InputKind::Chip8)
+                } else if input_def.action.is_some() {
+                    input_def.action.clone().map(InputKind::Action)
                 } else {
                     None
                 }
