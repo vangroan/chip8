@@ -177,8 +177,7 @@ mod de {
             E: Error,
         {
             Self::check_int(v)?;
-            KeyCode::try_from(v as u8)
-                .map_err(|err| E::invalid_value(Unexpected::Signed(v as i64), &err))
+            KeyCode::try_from(v as u8).map_err(|err| E::invalid_value(Unexpected::Signed(v), &err))
         }
     }
 }
