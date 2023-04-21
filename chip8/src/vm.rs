@@ -121,6 +121,11 @@ impl Chip8Vm {
         self.cpu.key_wait = false;
     }
 
+    /// Clear the keyboard input state, setting all keys to up.
+    pub fn clear_keys(&mut self) {
+        self.cpu.clear_keys()
+    }
+
     /// Check the clock whether the CPU should be stepped.
     pub fn clock_tick(&mut self) -> bool {
         true

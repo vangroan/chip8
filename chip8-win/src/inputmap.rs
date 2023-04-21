@@ -1,4 +1,6 @@
-use std::{collections::VecDeque, iter::Iterator};
+use std::collections::VecDeque;
+use std::fmt;
+use std::iter::Iterator;
 
 use chip8::KeyCode;
 use serde::Deserialize;
@@ -16,9 +18,11 @@ use winit::event::{ElementState, VirtualKeyCode};
 ///   identified by a readable string.
 #[derive(Debug)]
 pub struct InputMap {
-    actions: Box<[InputInfo]>,
+    actions: Box<[ActionInfo]>,
     /// Mapping of host keyboard keys to application actions, by index.
-    keys: Box<[(VirtualKeyCode, usize)]>,
+    keymap: Box<[(VirtualKeyCode, usize)]>,
+    /// Mapping of action names to application actions, by index.
+    namemap: Box<[(SmolStr, usize)]>,
     /// Buffer of collected events, as they happen.
     events: VecDeque<InputKind>,
     /// Current state of the key. Whether it is pressed down.
@@ -26,7 +30,7 @@ pub struct InputMap {
 }
 
 #[derive(Debug)]
-struct InputInfo {
+struct ActionInfo {
     chip8: Option<KeyCode>,
     action: Option<SmolStr>,
     #[allow(dead_code)]
@@ -34,7 +38,7 @@ struct InputInfo {
 }
 
 /// Mapping to make optional fields infallible.
-impl From<InputDef> for InputInfo {
+impl From<InputDef> for ActionInfo {
     fn from(def: InputDef) -> Self {
         Self {
             chip8: def.chip8,
@@ -76,45 +80,92 @@ impl InputKind {
 }
 
 #[derive(Debug)]
-struct InputState {
-    event: InputKind,
-    pressed: bool,
+pub struct InputState {
+    pub kind: InputKind,
+    pub key_state: KeyState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyState {
+    Pressed,
+    Released,
+    Down,
+}
+
+impl KeyState {
+    pub fn is_down(&self) -> bool {
+        matches!(self, Self::Pressed | Self::Down)
+    }
+
+    pub fn is_pressed(&self) -> bool {
+        *self == Self::Pressed
+    }
+}
+
+impl From<winit::event::ElementState> for KeyState {
+    fn from(key_state: winit::event::ElementState) -> Self {
+        match key_state {
+            winit::event::ElementState::Pressed => KeyState::Pressed,
+            winit::event::ElementState::Released => KeyState::Released,
+        }
+    }
+}
+
+impl fmt::Display for KeyState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let name = match self {
+            Self::Pressed => "pressed",
+            Self::Released => "released",
+            Self::Down => "down",
+        };
+        write!(f, "{name}")
+    }
 }
 
 impl InputMap {
+    /// Load an input map from a YAML file.
     pub fn from_file(filepath: &str) -> std::io::Result<Self> {
         let mut file = std::fs::File::open(filepath)?;
 
         let defs: Vec<InputDef> = serde_yaml::from_reader(&mut file).unwrap();
         log::debug!("loaded input definitions: {:#?}", defs);
 
-        let keys = Self::build_keys(&defs);
-        let actions = defs.into_iter().map(InputInfo::from).collect();
-
-        Ok(InputMap {
-            actions,
-            keys,
+        let mut inputmap = InputMap {
+            actions: defs.into_iter().map(ActionInfo::from).collect(),
+            keymap: Box::new([]),
+            namemap: Box::new([]),
             events: VecDeque::new(),
             state: Vec::new(),
-        })
+        };
+
+        inputmap.rebuild_mappings();
+
+        Ok(inputmap)
     }
 
-    /// Build a mapping of [`VirtualKeyCode`]s to indices into the given action definition mapping.
-    fn build_keys(defs: &[InputDef]) -> Box<[(VirtualKeyCode, usize)]> {
-        defs.iter()
-            // definitions will be mapped by their index
-            .enumerate()
-            // lift keycodes out of the definitions
-            .filter_map(|(index, def)| def.keyboard_keys.as_ref().map(|keys| (index, keys)))
-            // flatten borrowed keycodes into one iterator of copied keycodes
-            .flat_map(|(index, keys)| keys.iter().copied().map(move |keycode| (keycode, index)))
-            .collect::<Vec<(VirtualKeyCode, usize)>>()
-            .into_boxed_slice()
+    /// Rebuild the input mappings to actions,
+    /// for when the actions have been changed.
+    fn rebuild_mappings(&mut self) {
+        let mut keymap = vec![];
+        let mut namemap = vec![];
+
+        self.actions.iter().enumerate().for_each(|(index, action)| {
+            for key in &action.keyboard_keys {
+                keymap.push((*key, index));
+            }
+
+            if let Some(ref name) = action.action {
+                namemap.push((name.clone(), index));
+            }
+        });
+
+        self.keymap = keymap.into_boxed_slice();
+        self.namemap = namemap.into_boxed_slice();
     }
 
     /// Given a user input keycode, map it to either a Chip8 key, or a named action.
     pub fn map_key(&self, key: VirtualKeyCode) -> Option<InputKind> {
-        self.keys
+        self.keymap
             .iter()
             .find(|(keycode, _)| *keycode == key)
             .map(|(_, index)| *index)
@@ -133,24 +184,41 @@ impl InputMap {
             })
     }
 
-    /// Push key event into the input state.
-    pub fn push_key(&mut self, keycode: VirtualKeyCode, state: ElementState) {
+    /// Process the internal input state.
+    ///
+    /// Call this at a frame boundary to prepare for new events.
+    pub fn process(&mut self) {
+        // clear out released inputs.
+        self.clear_releases();
+
+        // Advance pressed state to down.
+        self.state
+            .iter_mut()
+            .filter(|ev| ev.key_state.is_pressed())
+            .for_each(|ev| ev.key_state = KeyState::Down);
+
+        // Clear event queue
+        for _ in self.drain_events() {}
+    }
+
+    fn set_state(&mut self, kind: InputKind, key_state: KeyState) {
+        match self.state.iter_mut().find(|el| el.kind == kind) {
+            Some(existing) => existing.key_state = key_state,
+            None => {
+                // Insert new state
+                self.state.push(InputState { kind, key_state })
+            }
+        }
+    }
+
+    /// Emit a key event.
+    pub fn emit_key(&mut self, keycode: VirtualKeyCode, element_state: ElementState) {
         // Convert `winit` key to our input framework
         match self.map_key(keycode) {
-            Some(event) => {
+            Some(kind) => {
                 // Stream of events in order
-                self.events.push_back(event.clone());
-
-                let pressed = state == ElementState::Pressed;
-
-                // Map of state flags that can be checked by code
-                match self.state.iter_mut().find(|el| el.event == event) {
-                    Some(existing) => existing.pressed = pressed,
-                    None => {
-                        // Insert new state
-                        self.state.push(InputState { event, pressed })
-                    }
-                }
+                self.events.push_back(kind.clone());
+                self.set_state(kind, KeyState::from(element_state));
             }
             None => {
                 log::trace!("no input mapping for {keycode:?}");
@@ -162,30 +230,44 @@ impl InputMap {
         let query = action.as_ref().trim();
         self.state
             .iter()
-            .filter(|state| matches!(state.event, InputKind::Action(_)))
-            .find(|state| match state.event {
+            .filter(|state| matches!(state.kind, InputKind::Action(_)))
+            .find(|state| match state.kind {
                 InputKind::Action(ref name) => name == query,
                 _ => false,
             })
-            .map(|state| state.pressed)
+            .map(|state| state.key_state.is_down())
             .unwrap_or(false)
     }
 
+    pub fn action_state(&self, action: impl AsRef<str>) -> Option<&InputState> {
+        let query = action.as_ref().trim();
+        self.state
+            .iter()
+            .filter(|state| matches!(state.kind, InputKind::Action(_)))
+            .find(|state| match state.kind {
+                InputKind::Action(ref name) => name == query,
+                _ => false,
+            })
+            .map(|state| state)
+    }
+
+    /// Remove all queued events.
     pub fn drain_events(&mut self) -> impl Iterator<Item = InputKind> + '_ {
         self.events.drain(..)
     }
 
-    pub fn clear_state(&mut self) {
+    /// Discard all key release states.
+    pub fn clear_releases(&mut self) {
         // All keys that were release last frame must be removed
-        self.state.retain(|state| state.pressed);
-
-        for state in &mut self.state {
-            state.pressed = false;
-        }
+        self.state.retain(|state| state.key_state.is_down());
     }
 
+    /// Return all Chip8 keys that are down.
     pub fn iter_chip8(&self) -> impl Iterator<Item = KeyCode> + '_ {
-        self.events.iter().filter_map(|ev| ev.as_chip8())
+        self.state
+            .iter()
+            .filter(|ev| ev.key_state.is_down())
+            .filter_map(|ev| ev.kind.as_chip8())
     }
 }
 

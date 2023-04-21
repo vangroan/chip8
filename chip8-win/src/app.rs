@@ -70,13 +70,13 @@ impl Chip8App {
             match event {
                 EV::NewEvents(_) => {
                     // Frame start
-                    self.input_map.clear_state();
+                    self.input_map.process();
                 }
                 EV::MainEventsCleared => {
                     // Frame Update
 
-                    if self.input_map.is_action_pressed(DEV_CONSOLE) {
-                        log::info!("Developer Console");
+                    if let Some(input) = self.input_map.action_state(DEV_CONSOLE) {
+                        log::info!("Developer Console: {}", input.key_state);
                     }
 
                     if self.input_map.is_action_pressed(EXIT) {
@@ -85,6 +85,7 @@ impl Chip8App {
                     }
 
                     // Merge input stream into VM
+                    self.vm.clear_keys();
                     for keycode in self.input_map.iter_chip8() {
                         self.vm.set_key(keycode, true);
                     }
@@ -152,7 +153,7 @@ impl Chip8App {
                         }
                         WE::KeyboardInput { input, .. } => {
                             if let Some(virtual_keycode) = input.virtual_keycode {
-                                self.input_map.push_key(virtual_keycode, input.state);
+                                self.input_map.emit_key(virtual_keycode, input.state);
                             }
                         }
                         WE::CloseRequested => {
