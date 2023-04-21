@@ -1,0 +1,32 @@
+# -----------------------------------------------------------------------------
+# RCS COSMAC Keypad
+#
+# | 1 | 2 | 3 | C |
+#   4   5   6   D
+#   7   8   9   E
+#   A   0   B   F
+
+- chip8: 0x0
+  keyboard_keys:
+  - A
+  - Numpad1
+
+- chip8: 0x1
+  keyboard_keys:
+  - A
+  - Numpad1
+
+- chip8: 0xF
+  keyboard_keys:
+  - A
+  - Numpad1
+
+# -----------------------------------------------------------------------------
+# Application Hotkeys
+- action: devconsole
+  keyboard_keys:
+  - Grave
+
+- action: exit
+  keyboard_keys:
+  - Escape

@@ -1,0 +1,34 @@
+[package]
+name = "chip8-win"
+version = "0.4.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chip8 = { path = "../chip8", features = ["serde"] }
+serde = "1.0"
+serde_yaml = "0.9"
+smol_str = "0.1"
+
+# Logging
+log = "0.4"
+slog = "2.7"
+slog-async = "2.7"
+slog-scope = "4.4"
+slog-stdlog = "4.1"
+slog-term = "2.7"
+
+# Windowing
+winit = { version = "0.28", default-features = false, features = ["serde"] }
+glutin = "0.30"
+glutin-winit = "0.3"
+raw-window-handle = "0.5"
+
+# Graphics
+bytemuck = "1.13"
+glow = "0.12"
+egui = "0.21"
+egui_glow = "0.21"
+egui-winit = "0.21"
+memoffset = "0.8"

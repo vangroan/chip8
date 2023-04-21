@@ -1,13 +1,15 @@
 [package]
 name = "chip8"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
+num-traits = "0.2"
 rand = "0.8"
+serde = { version = "1.0", optional = true }
 
 [dev-dependencies]
 criterion = "0.4"
@@ -17,9 +19,11 @@ name = "maze"
 harness = false
 
 [features]
-default = []
+default = ["serde"]
 
 op_trace = []
 
 # Turn off the CPU clock and run the interpreter as quickly as possible.
 throttle = []
+
+serde = ["dep:serde"]
