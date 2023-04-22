@@ -128,7 +128,6 @@ impl Chip8App {
                                     }
                                     // Yield control back to outer loop.
                                     Flow::Jump | Flow::KeyWait | Flow::Interrupt => {
-                                        self.window_ctx.request_redraw();
                                         break 'vm;
                                     }
                                     _ => {}

@@ -40,5 +40,17 @@ pub const CLOCK_CYCLE_TIME: u64 = NANOS_IN_SECOND / DELAY_FREQUENCY;
 /// Number of keys ob the keyboard (0x0-0xF)
 pub const KEY_COUNT: u8 = 16;
 
+/// Memory location where the fontset starts.
+pub const FONTSET_START: u16 = 0x0;
+
+/// Number of supported characters.
+pub const FONTSET_COUNT: usize = 16;
+
+/// Character height in bytes.
+pub const FONTSET_HEIGHT: usize = 5;
+
+/// Total length of fontset in bytes.
+pub const FONTSET_DATA_LENGTH: usize = FONTSET_COUNT * FONTSET_HEIGHT;
+
 /// Type for storing the 12-bit memory addresses.
 pub type Address = u16;

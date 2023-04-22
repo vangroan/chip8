@@ -44,6 +44,27 @@ pub struct Assembler<'a> {
     /// Parsing continues to collect further possible errors, but it
     /// has effectively failed the assembling run.
     errors: Vec<Chip8Error>,
+    /// Assembler configuration parameters.
+    conf: AsmConf,
+}
+
+/// Assembler configuration parameters.
+pub struct AsmConf {
+    /// Pad data sections with zero so that the number of bytes are even.
+    /// Default: `true`
+    ///
+    /// The Chip-8 interpreter increases the program counter by 2 bytes
+    /// every iteration. Thus instructions must be aligned to 2 bytes.
+    ///
+    /// There are special cases, like loading fonts, which need data to
+    /// be packed even though the byte count will be odd.
+    pub pad_data: bool,
+}
+
+impl Default for AsmConf {
+    fn default() -> Self {
+        Self { pad_data: true }
+    }
 }
 
 /// Access to a label that hasn't been defined yet.
@@ -63,12 +84,17 @@ macro_rules! debug_assert_match {
 
 impl<'a> Assembler<'a> {
     pub fn new(lexer: Lexer<'a>) -> Self {
+        Self::with_conf(lexer, AsmConf::default())
+    }
+
+    pub fn with_conf(lexer: Lexer<'a>, conf: AsmConf) -> Self {
         Self {
             stream: TokenStream::new(lexer),
             labels: vec![],
             defer: vec![],
             bytecode: vec![],
             errors: vec![],
+            conf,
         }
     }
 
@@ -239,7 +265,15 @@ impl<'a> Assembler<'a> {
     #[allow(dead_code)]
     fn dump_bytecode(&self) {
         // Instructions are always 2 bytes.
-        assert!(self.bytecode.len() % 2 == 0);
+        if self.conf.pad_data {
+            println!("bytecode length: {}", self.bytecode.len());
+            // log::warn!("bytecode length: {}", self.bytecode.len());
+            assert!(
+                self.bytecode.len() % 2 == 0,
+                "bytecode length: {}",
+                self.bytecode.len()
+            );
+        }
 
         for (i, instr) in self.bytecode.chunks(2).enumerate() {
             let offset = i * 2;
@@ -545,7 +579,9 @@ impl<'a> Assembler<'a> {
     /// Emit raw data into bytecode.
     fn parse_data_block(&mut self) -> Chip8Result<()> {
         trace!("parse data block");
-        debug_assert!(self.bytecode.len() % 2 == 0);
+        if self.conf.pad_data {
+            assert!(self.bytecode.len() % 2 == 0);
+        }
 
         let mut count = 0;
         let mut last_token: Option<Token> = None;
@@ -568,12 +604,9 @@ impl<'a> Assembler<'a> {
         trace!("data count: {count}");
 
         // Stride of bytecode must be 2 for program counter to increment correctly.
-        if let Some(token) = last_token {
-            if count % 2 != 0 {
-                // Place the error message at the last data literal.
-                // FIXME: Error format that will show preceding lines.
-                return Err(self.error(token, "data must be added in 2 byte pairs"));
-            }
+        if self.conf.pad_data && count % 2 != 0 {
+            // Pad with an unused zero
+            self.emit(0);
         }
 
         Ok(())

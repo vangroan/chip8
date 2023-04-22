@@ -9,7 +9,7 @@ mod error;
 mod vm;
 
 pub use self::{
-    asm::assemble,
+    asm::{assemble, AsmConf},
     cpu::{Chip8Cpu, Chip8DisplayBuffer},
     devices::KeyCode,
     error::{Chip8Error, Chip8Result},

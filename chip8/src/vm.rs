@@ -40,6 +40,28 @@ impl Chip8Vm {
         &self.conf
     }
 
+    pub fn load_builtin_font(&mut self) -> Chip8Result<()> {
+        let conf = crate::asm::AsmConf {
+            // Fonts are 5 bytes high, and packed together for historical reasons.
+            pad_data: false,
+        };
+        let fontset = crate::asm::assemble_with(include_str!("fontset.asm"), conf)?;
+        self.load_font(&fontset)
+    }
+
+    pub fn load_font(&mut self, fontset: &[u8]) -> Chip8Result<()> {
+        if fontset.len() != FONTSET_DATA_LENGTH {
+            return Err(Chip8Error::Font(format!(
+                "fontset data must be {FONTSET_DATA_LENGTH} bytes, got {}",
+                fontset.len()
+            )));
+        }
+
+        self.cpu.ram[0..FONTSET_DATA_LENGTH].copy_from_slice(fontset);
+
+        Ok(())
+    }
+
     pub fn load_bytecode(&mut self, bytecode: &[u8]) -> Chip8Result<()> {
         if !check_program_size(bytecode) {
             return Err(Chip8Error::LargeProgram);
@@ -47,6 +69,9 @@ impl Chip8Vm {
 
         // Start with clean memory to avoid leaking previous program.
         self.cpu.clear_memory();
+
+        // Reset fonts
+        self.load_builtin_font()?;
 
         // Load program into virtual RAM
         self.cpu.ram[MEM_START..MEM_START + bytecode.len()].copy_from_slice(bytecode);
@@ -308,16 +333,18 @@ impl Chip8Vm {
                 }
                 // Arithmetic instructions indentified by n
                 0x8 => control_flow = self.exec_math(op, vx, vy, n),
-                // 9XY0 (SNE Vx, Vy)
+                // 9xy0 (SNE Vx, Vy)
                 //
                 // Skip next instruction if Vx != Vy.
                 // The values of Vx and Vy are compared, and if they are not equal, the program counter is increased by 2.
-                0x9 => todo!("SNE Vx, Vy"),
-                // ANNN (LD I, addr)
+                0x9 => {
+                    todo!("SNE Vx, Vy")
+                }
+                // Annn (LD I, addr)
                 //
                 // Set address register I to value NNN.
                 0xA => {
-                    op_trace_nnn("LDI", &self.cpu);
+                    op_trace_nnn("LD I", &self.cpu);
 
                     self.cpu.address = nnn;
                 }
@@ -539,9 +566,15 @@ impl Chip8Vm {
                 debug_assert_eq!(op, 0x0);
 
                 self.cpu.pc = self.cpu.stack[self.cpu.sp] as usize;
-                self.cpu.sp -= 1;
+                let (sp, underflow) = self.cpu.sp.overflowing_sub(1);
 
-                control_flow = Flow::Jump;
+                if underflow {
+                    self.cpu.set_error("call stack underflow");
+                    control_flow = Flow::Error;
+                } else {
+                    self.cpu.sp = sp;
+                    control_flow = Flow::Jump;
+                }
             }
             // ----------------------------------------------------------------
             // Ex9E (SKP Vx)
@@ -570,7 +603,6 @@ impl Chip8Vm {
                 op_trace_xk("LD", &self.cpu, "DT");
                 debug_assert_eq!(op, 0xF);
 
-                let vx = self.cpu.op_x();
                 self.cpu.registers[vx as usize] = self.cpu.delay_timer;
             }
             // Fx0A (LD Vx, K)
@@ -598,7 +630,6 @@ impl Chip8Vm {
                 op_trace_kx("LD", &self.cpu, "DT");
                 debug_assert_eq!(op, 0xF);
 
-                let vx = self.cpu.op_x();
                 self.cpu.delay_timer = self.cpu.registers[vx as usize];
             }
             // Fx18 (LD ST, Vx)
@@ -621,7 +652,8 @@ impl Chip8Vm {
             0x29 => {
                 op_trace_kx("LD", &self.cpu, "F");
 
-                // TODO: Fonts
+                let x = self.cpu.registers[vx as usize];
+                self.cpu.address = FONTSET_START + (x as u16) * FONTSET_HEIGHT as u16;
             }
             // Fx33 (LD B, Vx)
             //
@@ -631,10 +663,11 @@ impl Chip8Vm {
             0x33 => {
                 op_trace_kx("LD", &self.cpu, "B");
 
-                let addr = nnn as usize;
-                self.cpu.ram[addr + 2] = vx       % 10;
-                self.cpu.ram[addr + 1] = vx / 10  % 10;
-                self.cpu.ram[addr]     = vx / 100 % 10;
+                let addr = self.cpu.address as usize;
+                let x = self.cpu.registers[vx as usize];
+                self.cpu.ram[addr + 2] = x       % 10;
+                self.cpu.ram[addr + 1] = x / 10  % 10;
+                self.cpu.ram[addr]     = x / 100 % 10;
             }
             // Fx55 (LD [I], Vx)
             //
@@ -642,11 +675,12 @@ impl Chip8Vm {
             0x55 => {
                 op_trace_kx("LD", &self.cpu, "[I]");
 
+                let addr = self.cpu.address as usize;
                 self.cpu.registers[0..=vx as usize]
                     .iter_mut()
                     .enumerate()
                     .for_each(|(v, x)| {
-                        self.cpu.ram[nnn as usize + v] = *x;
+                        self.cpu.ram[addr + v] = *x;
                     });
             }
             // Fx65 (LD Vx, [I])
@@ -655,11 +689,12 @@ impl Chip8Vm {
             0x65 => {
                 op_trace_xk("LD", &self.cpu, "[I]");
 
+                let addr = self.cpu.address as usize;
                 self.cpu.registers[0..=vx as usize]
                     .iter_mut()
                     .enumerate()
                     .for_each(|(v, x)| {
-                        *x = self.cpu.ram[nnn as usize + v];
+                        *x = self.cpu.ram[addr + v];
                     });
             }
             // ----------------------------------------------------------------
@@ -893,22 +928,22 @@ mod test {
         // the pixels of the first draw
         //
         // draw sprite 1
-        // _#______, vf == 0
+        // ____####, vf == 0
         //
         // draw sprite 2
-        // ##______, vf == 0
+        // ########, vf == 0
         let program = concat!(
-            "LD v0, 0 \n", // x
-            "LD v1, 0 \n", // y
             "LD I, .sprite \n",
+            "LD v0, 4 \n", // x := 4
+            "LD v1, 0 \n", // y := 0
             // draw sprite 1
             "DRW v0, v1, 1 \n",
             // draw sprite 2
-            "LD v0, 0 \n",
+            "LD v0, 0 \n", // x := 0
             "DRW v0, v1, 1 \n",
             // ---
             ".sprite \n",
-            "0b10000000 \n",
+            "0b11110000 \n",
             "0b00000000 \n"
         );
         let rom = crate::assemble(program);
@@ -919,9 +954,8 @@ mod test {
 
         vm.run_steps(5).unwrap();
 
-        assert!(vm.display_buffer()[0]); // sprite 2
-        assert!(vm.display_buffer()[1]); // sprite 1
-        assert!(!vm.display_buffer()[3]);
+        assert_eq!(vm.display_buffer()[0], false); // sprite 1
+        assert_eq!(vm.display_buffer()[4], true); // sprite 2
         assert_eq!(vm.cpu.registers[0xF], 0);
     }
 }
