@@ -45,7 +45,7 @@ impl Chip8App {
     }
 
     /// Load ROM file into VM
-    pub fn load_rom(&mut self, filepath: &str) -> Result<(), AppError> {
+    pub fn load_rom_file(&mut self, filepath: &str) -> Result<(), AppError> {
         info!("load rom: {filepath}");
 
         let mut buf = vec![];
@@ -55,6 +55,17 @@ impl Chip8App {
 
         self.vm.load_bytecode(&buf)?;
 
+        Ok(())
+    }
+
+    pub fn load_rom_asm(&mut self, source_code: &str) -> Result<(), AppError> {
+        let bytecode = chip8::assemble(source_code)?;
+        self.vm.load_bytecode(&bytecode)?;
+        Ok(())
+    }
+
+    pub fn load_rom_bytecode(&mut self, bytecode: &[u8]) -> Result<(), AppError> {
+        self.vm.load_bytecode(bytecode)?;
         Ok(())
     }
 }
@@ -117,6 +128,7 @@ impl Chip8App {
                                     }
                                     // Yield control back to outer loop.
                                     Flow::Jump | Flow::KeyWait | Flow::Interrupt => {
+                                        self.window_ctx.request_redraw();
                                         break 'vm;
                                     }
                                     _ => {}

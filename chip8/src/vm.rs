@@ -155,6 +155,23 @@ impl Chip8Vm {
         Ok(Flow::Ok)
     }
 
+    pub fn run_steps(&mut self, step_count: usize) -> Chip8Result<Flow> {
+        self.reset();
+
+        for _ in 0..step_count {
+            match self.resume() {
+                Flow::Error => match self.cpu.error {
+                    Some(err) => return Err(Chip8Error::Runtime(err)),
+                    None => return Ok(Flow::Error),
+                },
+                Flow::Interrupt => break,
+                _ => {}
+            }
+        }
+
+        Ok(Flow::Ok)
+    }
+
     fn resume(&mut self) -> Flow {
         self.cpu.trap = false;
         self.cpu.error = None;
@@ -219,7 +236,7 @@ impl Chip8Vm {
 
             match code {
                 // Miscellaneous instructions identified by nn
-                0x0 | 0xE | 0xF => control_flow = self.exec_misc(op, vx, nn),
+                0x0 | 0xE | 0xF => control_flow = self.exec_misc(op, vx, nn, nnn),
                 // 1NNN (JP addr)
                 //
                 // Jump to address.
@@ -280,13 +297,14 @@ impl Chip8Vm {
 
                     self.cpu.registers[vx as usize] = nn;
                 }
-                // 7XNN (ADD Vx, byte)
+                // 7xnn (ADD Vx, byte)
                 //
                 // Add value NN to register VX. Carry flag is not set.
                 0x7 => {
                     op_trace_xnn("ADD", &self.cpu);
 
-                    self.cpu.registers[vx as usize] += nn;
+                    let x = self.cpu.registers[vx as usize];
+                    self.cpu.registers[vx as usize] = x.wrapping_add(nn & 0xFF);
                 }
                 // Arithmetic instructions indentified by n
                 0x8 => control_flow = self.exec_math(op, vx, vy, n),
@@ -313,10 +331,10 @@ impl Chip8Vm {
 
                     self.cpu.registers[vx as usize] = nn & rng.gen::<u8>();
                 }
-                // DXYN (DRW Vx, Vy, nibble)
+                // Dxyn (DRW Vx, Vy, nibble)
                 //
-                // Draw sprite to the display buffer, at coordinate as per registers VX and VY.
-                // Sprite is encoded as 8 pixels wide, N+1 pixels high, stored in bits located in
+                // Draw sprite to the display buffer, at coordinate as per registers Vx and Vy.
+                // Sprite is encoded as 8 pixels wide, N pixels high, stored in bits located in
                 // memory pointed to by address register I.
                 //
                 // If the sprite is drawn outside of the display area, it is wrapped around to the other side.
@@ -333,29 +351,29 @@ impl Chip8Vm {
                     let mut is_erased = false;
 
                     // Iteration from pointer in address register I to number of rows specified by opcode value N.
-                    for (r, row) in self
-                        .cpu
+                    self.cpu
                         .ram
                         .iter()
                         .skip(self.cpu.address as usize)
                         .take(n as usize)
                         .enumerate()
-                    {
-                        // Each row is 8 bits representing the 8 pixels of the sprite.
-                        for c in 0..8 {
-                            let d = ((x + c) & DISPLAY_WIDTH_MASK)
-                                + ((y + r) & DISPLAY_HEIGHT_MASK) * DISPLAY_WIDTH;
+                        .for_each(|(r, row)| {
+                            // Each row is 8 bits representing the 8 pixels of the sprite.
+                            for c in 0..8 {
+                                let d = (((x + c) & DISPLAY_WIDTH_MASK)
+                                    + ((y + r) & DISPLAY_HEIGHT_MASK) * DISPLAY_WIDTH)
+                                    & (MEM_SIZE - 1);
 
-                            let old_px = self.cpu.display[d];
-                            let new_px = old_px ^ ((row >> (7 - c) & 0x1) == 1);
+                                let old_px = self.cpu.display[d];
+                                let new_px = (row >> (7 - c) & 1) != 0;
 
-                            // XOR erases a pixel when both the old and new values are both 1.
-                            is_erased |= old_px && new_px;
+                                // XOR erases a pixel when both the old and new values are both 1.
+                                is_erased |= old_px && new_px;
 
-                            // Write to display buffer
-                            self.cpu.display[d] = new_px;
-                        }
-                    }
+                                // Write to display buffer
+                                self.cpu.display[d] = old_px ^ new_px;
+                            }
+                        });
 
                     // If a pixel was erased, then a collision occurred.
                     self.cpu.registers[0xF] = is_erased as u8;
@@ -425,7 +443,7 @@ impl Chip8Vm {
                     self.cpu.registers[vy as usize],
                 );
                 let result = x as usize + y as usize;
-                self.cpu.registers[vx as usize] = (result & 0xF) as u8; // Overflow wrap
+                self.cpu.registers[vx as usize] = (result & 0xFF) as u8; // Overflow wrap
                 self.cpu.registers[0xF] = if result > 0x255 { 1 } else { 0 };
             }
             // 8XY5 (SUB Vx, Vy)
@@ -472,14 +490,14 @@ impl Chip8Vm {
             }
             // 8XYE (SHL Vx)
             //
-            // Shift VX left by 1.
             // If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0.
+            // Shift VX left by 1.
             // VY is unused.
             0xE => {
                 op_trace_xy_op("SHL", &self.cpu);
 
                 let x = self.cpu.registers[vx as usize];
-                self.cpu.registers[0xF] = x & 1;
+                self.cpu.registers[0xF] = (x >> 7) & 1;
                 self.cpu.registers[vx as usize] = x << 1;
             }
             // ----------------------------------------------------------------
@@ -496,7 +514,7 @@ impl Chip8Vm {
     /// Execute a miscellaneous instruction
     #[inline]
     #[must_use]
-    fn exec_misc(&mut self, op: u8, vx: u8, nn: u8) -> Flow {
+    fn exec_misc(&mut self, op: u8, vx: u8, nn: u8, nnn: u16) -> Flow {
         let mut control_flow = Flow::Ok;
 
         match nn {
@@ -531,12 +549,18 @@ impl Chip8Vm {
                 op_trace("SKP", &self.cpu);
                 debug_assert_eq!(op, 0xE);
 
-                let vx = self.cpu.op_x();
                 if self.cpu.key_state(self.cpu.registers[vx as usize & 0xF]) {
                     self.cpu.pc += 2;
                 }
             }
-            0xA1 => todo!("SKNP Vx"),
+            // ExA1 (SKNP Vx)
+            0xA1 => {
+                op_trace("SKNP", &self.cpu);
+
+                if !self.cpu.key_state(self.cpu.registers[vx as usize & 0xF]) {
+                    self.cpu.pc += 2;
+                }
+            }
             // ----------------------------------------------------------------
             // Fx07 (LD Vx, DT)
             //
@@ -591,10 +615,51 @@ impl Chip8Vm {
                 control_flow = Flow::Sound;
             }
             0x1E => todo!("ADD I, Vx"),
-            0x29 => todo!("LD F, Vx"),
-            0x33 => todo!("LD B, Vx"),
-            0x55 => todo!("LD [I], Vx"),
-            0x65 => todo!("LD Vx, [I]"),
+            // Fx29 (LD F, Vx)
+            //
+            // Set I = location of sprite for digit Vx.
+            0x29 => {
+                op_trace_kx("LD", &self.cpu, "F");
+
+                // TODO: Fonts
+            }
+            // Fx33 (LD B, Vx)
+            //
+            // Store BCD representation of Vx in memory locations I, I+1, and I+2.
+            0x33 => {
+                op_trace_kx("LD", &self.cpu, "B");
+
+                let addr = nnn as usize;
+                self.cpu.ram[addr + 2] = vx % 10;
+                self.cpu.ram[addr + 1] = vx / 10 % 10;
+                self.cpu.ram[addr] = vx / 100 % 10;
+            }
+            // Fx55 (LD [I], Vx)
+            //
+            // Store registers V0 through Vx in memory starting at location I.
+            0x55 => {
+                op_trace_kx("LD", &self.cpu, "[I]");
+
+                self.cpu.registers[0..=vx as usize]
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(v, x)| {
+                        self.cpu.ram[nnn as usize + v] = *x;
+                    });
+            }
+            // Fx65 (LD Vx, [I])
+            //
+            // Read registers V0 through Vx from memory starting at location I.
+            0x65 => {
+                op_trace_xk("LD", &self.cpu, "[I]");
+
+                self.cpu.registers[0..=vx as usize]
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(v, x)| {
+                        *x = self.cpu.ram[nnn as usize + v];
+                    });
+            }
             // ----------------------------------------------------------------
             // Unsupported operation.
             _ => {
@@ -808,5 +873,53 @@ mod test {
         assert_eq!(vm.cpu.pc, MEM_START + 4);
         // assert!(!vm.cpu.key_state(0x05), "keyboard state was not cleared");
         assert_eq!(vm.cpu.registers[2], 0x42); // sentinal
+    }
+
+    /// Booleans must be cast to u8 1 or 0
+    #[test]
+    fn test_assert_bool_cast() {
+        assert_eq!(true as u8, 1);
+        assert_eq!(false as u8, 0);
+    }
+
+    #[test]
+    fn test_draw_collision() {
+        let mut vm = Chip8Vm::new(Chip8Conf::default());
+
+        // Draw two pixels next to each other.
+        // The zero bits of the second draw must not erase
+        // the pixels of the first draw
+        //
+        // draw sprite 1
+        // _#______, vf == 0
+        //
+        // draw sprite 2
+        // ##______, vf == 0
+        let program = concat!(
+            "LD v0, 0 \n", // x
+            "LD v1, 0 \n", // y
+            "LD I, .sprite \n",
+            // draw sprite 1
+            "DRW v0, v1, 1 \n",
+            // draw sprite 2
+            "LD v0, 0 \n",
+            "DRW v0, v1, 1 \n",
+            // ---
+            ".sprite \n",
+            "0b10000000 \n",
+            "0b00000000 \n"
+        );
+        let rom = crate::assemble(program);
+        if let Err(ref err) = rom {
+            eprintln!("asm error: {err}");
+        }
+        vm.load_bytecode(&rom.unwrap()).unwrap();
+
+        vm.run_steps(5).unwrap();
+
+        assert!(vm.display_buffer()[0]); // sprite 2
+        assert!(vm.display_buffer()[1]); // sprite 1
+        assert!(!vm.display_buffer()[3]);
+        assert_eq!(vm.cpu.registers[0xF], 0);
     }
 }

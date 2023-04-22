@@ -26,7 +26,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let window_ctx = WindowContext::new(&event_loop);
     let mut app = Chip8App::from_window(window_ctx, input_map);
 
-    app.load_rom("chip8/programs/maze")?;
+    // app.load_rom("chip8/programs/maze")?;
+    // app.load_rom_file("chip8/programs/BREAKOUT")?;
+    if let Err(err) = app.load_rom_asm(include_str!("../../programs/collision_test.asm")) {
+        panic!("Failed to assemble program: {err}");
+    }
 
     match app.run(&mut event_loop) {
         Ok(_) => {}
