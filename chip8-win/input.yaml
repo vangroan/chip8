@@ -8,18 +8,67 @@
 
 - chip8: 0x0
   keyboard_keys:
-  - A
-  - Numpad1
+  - Numpad0
 
 - chip8: 0x1
   keyboard_keys:
-  - A
   - Numpad1
+
+- chip8: 0x2
+  keyboard_keys:
+  - Numpad2
+
+- chip8: 0x3
+  keyboard_keys:
+  - Numpad3
+
+- chip8: 0x4
+  keyboard_keys:
+  - Numpad4
+
+- chip8: 0x5
+  keyboard_keys:
+  - Numpad5
+
+- chip8: 0x6
+  keyboard_keys:
+  - Numpad6
+
+- chip8: 0x7
+  keyboard_keys:
+  - Numpad7
+
+- chip8: 0x8
+  keyboard_keys:
+  - Numpad8
+
+- chip8: 0x9
+  keyboard_keys:
+  - Numpad9
+
+- chip8: 0xA
+  keyboard_keys:
+  - A
+
+- chip8: 0xB
+  keyboard_keys:
+  - B
+
+- chip8: 0xC
+  keyboard_keys:
+  - C
+
+- chip8: 0xD
+  keyboard_keys:
+  - D
+
+- chip8: 0xE
+  keyboard_keys:
+  - E
 
 - chip8: 0xF
   keyboard_keys:
-  - A
-  - Numpad1
+  - F
 
 # -----------------------------------------------------------------------------
 # Application Hotkeys
