@@ -625,14 +625,16 @@ impl Chip8Vm {
             }
             // Fx33 (LD B, Vx)
             //
-            // Store BCD representation of Vx in memory locations I, I+1, and I+2.
+            // Store the binary-coded decimal representation of Vx
+            // in the memory locations I, I+1, and I+2.
+            #[rustfmt::skip]
             0x33 => {
                 op_trace_kx("LD", &self.cpu, "B");
 
                 let addr = nnn as usize;
-                self.cpu.ram[addr + 2] = vx % 10;
-                self.cpu.ram[addr + 1] = vx / 10 % 10;
-                self.cpu.ram[addr] = vx / 100 % 10;
+                self.cpu.ram[addr + 2] = vx       % 10;
+                self.cpu.ram[addr + 1] = vx / 10  % 10;
+                self.cpu.ram[addr]     = vx / 100 % 10;
             }
             // Fx55 (LD [I], Vx)
             //
