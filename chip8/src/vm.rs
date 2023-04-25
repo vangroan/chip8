@@ -430,6 +430,9 @@ impl Chip8Vm {
     #[must_use]
     fn exec_math(&mut self, op: u8, vx: u8, vy: u8, n: u8) -> Flow {
         debug_assert_eq!(op, 0x8);
+        assert!((vx as usize) < self.cpu.registers.len());
+        assert!((vy as usize) < self.cpu.registers.len());
+
         let mut control_flow = Flow::Ok;
 
         match n {
@@ -550,6 +553,8 @@ impl Chip8Vm {
     #[inline]
     #[must_use]
     fn exec_misc(&mut self, op: u8, vx: u8, nn: u8) -> Flow {
+        assert!((vx as usize) < self.cpu.registers.len());
+
         let mut control_flow = Flow::Ok;
 
         match nn {
@@ -609,7 +614,6 @@ impl Chip8Vm {
             // The value of DT is placed into Vx.
             0x07 => {
                 op_trace_xk("LD", &self.cpu, "DT");
-                debug_assert_eq!(op, 0xF);
 
                 self.cpu.registers[vx as usize] = self.cpu.delay_timer;
             }
@@ -636,7 +640,6 @@ impl Chip8Vm {
             // DT is set equal to the value of Vx.
             0x15 => {
                 op_trace_kx("LD", &self.cpu, "DT");
-                debug_assert_eq!(op, 0xF);
 
                 self.cpu.delay_timer = self.cpu.registers[vx as usize];
             }
@@ -646,7 +649,6 @@ impl Chip8Vm {
             // ST is set equal to the value of Vx.
             0x18 => {
                 op_trace_kx("LD", &self.cpu, "ST");
-                debug_assert_eq!(op, 0xF);
 
                 let vx = self.cpu.op_x();
                 self.cpu.sound_timer = self.cpu.registers[vx as usize];
