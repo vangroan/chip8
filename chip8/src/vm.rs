@@ -261,7 +261,7 @@ impl Chip8Vm {
 
             match code {
                 // Miscellaneous instructions identified by nn
-                0x0 | 0xE | 0xF => control_flow = self.exec_misc(op, vx, nn, nnn),
+                0x0 | 0xE | 0xF => control_flow = self.exec_misc(op, vx, nn),
                 // 1NNN (JP addr)
                 //
                 // Jump to address.
@@ -310,7 +310,9 @@ impl Chip8Vm {
                 0x5 => {
                     op_trace_xy("SE", &self.cpu);
 
-                    if self.cpu.registers[vx as usize] == self.cpu.registers[vy as usize] {
+                    let x = self.cpu.registers[vx as usize];
+                    let y = self.cpu.registers[vy as usize];
+                    if x == y {
                         self.cpu.pc += 2;
                     }
                 }
@@ -338,7 +340,13 @@ impl Chip8Vm {
                 // Skip next instruction if Vx != Vy.
                 // The values of Vx and Vy are compared, and if they are not equal, the program counter is increased by 2.
                 0x9 => {
-                    todo!("SNE Vx, Vy")
+                    op_trace_xy("SNE", &self.cpu);
+
+                    let x = self.cpu.registers[vx as usize];
+                    let y = self.cpu.registers[vy as usize];
+                    if x != y {
+                        self.cpu.pc += 2;
+                    }
                 }
                 // Annn (LD I, addr)
                 //
@@ -541,7 +549,7 @@ impl Chip8Vm {
     /// Execute a miscellaneous instruction
     #[inline]
     #[must_use]
-    fn exec_misc(&mut self, op: u8, vx: u8, nn: u8, nnn: u16) -> Flow {
+    fn exec_misc(&mut self, op: u8, vx: u8, nn: u8) -> Flow {
         let mut control_flow = Flow::Ok;
 
         match nn {
@@ -645,7 +653,16 @@ impl Chip8Vm {
                 self.cpu.buzzer_state = self.cpu.sound_timer > 0;
                 control_flow = Flow::Sound;
             }
-            0x1E => todo!("ADD I, Vx"),
+            // Fx1E (ADD I, Vx)
+            //
+            // Add Vx to I
+            0x1E => {
+                op_trace_kx("ADD", &self.cpu, "I");
+
+                let addr = self.cpu.address;
+                let x = self.cpu.registers[vx as usize & 0xF] as u16;
+                self.cpu.address = addr.wrapping_add(x);
+            }
             // Fx29 (LD F, Vx)
             //
             // Set I = location of sprite for digit Vx.
