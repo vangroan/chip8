@@ -11,5 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 chip8 = { path = "../chip8" }
+chip8-win = { path = "../chip8-win" }
 log = "0.4"
 simple_logger = { version = "4.1" }

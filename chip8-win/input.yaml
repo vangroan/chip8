@@ -79,3 +79,7 @@
 - action: exit
   keyboard_keys:
   - Escape
+
+- action: reset
+  keyboard_keys:
+  - F3

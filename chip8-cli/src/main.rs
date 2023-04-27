@@ -23,6 +23,7 @@ examples:
     chip8 dis breakout.rom
 "#;
 
+#[allow(dead_code)]
 fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
     println!("Running Bytecode Interpreter");
 
@@ -44,6 +45,15 @@ fn run_bytecode(filepath: impl AsRef<str>) -> Chip8Result<()> {
     result?;
 
     Ok(())
+}
+
+fn run_window_application(filepath: impl AsRef<str>) -> Result<(), chip8_win::AppError> {
+    println!("Running Chip8 cirtual machine");
+
+    let bytecode = fs::read(filepath.as_ref())?;
+    let input_map = chip8_win::InputMap::from_file("chip8-win/input.yaml")?;
+
+    chip8_win::run_chip8_window(&bytecode, input_map)
 }
 
 fn run_assembler(filepath: impl AsRef<str>) -> Chip8Result<()> {
@@ -127,7 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap();
 
     match parse_args() {
-        Some(Cmd::Run { filepath }) => run_bytecode(filepath)?,
+        Some(Cmd::Run { filepath }) => run_window_application(filepath)?,
         Some(Cmd::Asm { filepath }) => run_assembler(filepath)?,
         Some(Cmd::Dis { filepath }) => run_disassemble(filepath)?,
         None => {

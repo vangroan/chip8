@@ -331,7 +331,7 @@ impl Chip8Vm {
                     op_trace_xnn("ADD", &self.cpu);
 
                     let x = self.cpu.registers[vx as usize];
-                    self.cpu.registers[vx as usize] = x.wrapping_add(nn & 0xFF);
+                    self.cpu.registers[vx as usize] = x.wrapping_add(nn);
                 }
                 // Arithmetic instructions indentified by n
                 0x8 => control_flow = self.exec_math(op, vx, vy, n),

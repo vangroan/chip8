@@ -20,6 +20,14 @@ pub struct Chip8App {
     input_map: InputMap,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum AppControl {
+    /// Application is done and requested an exit.
+    Exit,
+    /// Reset VM state and reload rom.
+    Reset,
+}
+
 impl Chip8App {
     /// Create the Chip8 window app.
     pub fn from_window(window_ctx: WindowContext, input_map: InputMap) -> Self {
@@ -72,8 +80,9 @@ impl Chip8App {
 
 /// Event Loop.
 impl Chip8App {
-    pub fn run(&mut self, event_loop: &mut EventLoop) -> Result<(), AppError> {
+    pub fn run(&mut self, event_loop: &mut EventLoop) -> Result<AppControl, AppError> {
         let main_window_id = self.window_ctx.window.id();
+        let mut app_control = AppControl::Exit;
 
         event_loop.run_return(|event, _, control_flow| {
             control_flow.set_poll();
@@ -90,21 +99,17 @@ impl Chip8App {
                         log::info!("Developer Console: {}", input.key_state);
                     }
 
-                    if self.input_map.is_action_pressed(EXIT) {
-                        log::info!("Exit");
+                    if self.input_map.is_action_released(EXIT) {
+                        log::info!("exit pressed");
+                        control_flow.set_exit();
+                    } else if self.input_map.is_action_released(RESET) {
+                        log::info!("reset pressed");
+                        app_control = AppControl::Reset;
                         control_flow.set_exit();
                     }
 
                     // Merge input stream into VM
-                    self.vm.clear_keys();
-                    for keycode in self.input_map.iter_chip8() {
-                        self.vm.set_key(keycode, true);
-                    }
-
-                    let s = self.vm.dump_keys().unwrap();
-                    if !s.is_empty() {
-                        log::debug!("{s}");
-                    }
+                    self.input_map.write_keys(&mut self.vm);
 
                     // Inner VM loop.
                     //
@@ -169,6 +174,7 @@ impl Chip8App {
                         }
                         WE::CloseRequested => {
                             control_flow.set_exit();
+                            app_control = AppControl::Exit;
                         }
                         _ => { /* blank */ }
                     }
@@ -177,6 +183,6 @@ impl Chip8App {
             }
         });
 
-        Ok(())
+        Ok(app_control)
     }
 }

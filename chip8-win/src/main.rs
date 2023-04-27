@@ -28,12 +28,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // app.load_rom_file("chip8/programs/maze")?;
     // app.load_rom_file("chip8/programs/BREAKOUT")?;
+    app.load_rom_file("chip8/programs/TETRIS.ch8")?;
     // if let Err(err) = app.load_rom_asm(include_str!("../../programs/collision_test.asm")) {
     //     panic!("Failed to assemble program: {err}");
     // }
-    if let Err(err) = app.load_rom_asm(include_str!("../../programs/fontset_test.asm")) {
-        panic!("Failed to assemble program: {err}");
-    }
+    // if let Err(err) = app.load_rom_asm(include_str!("../../programs/fontset_test.asm")) {
+    //     panic!("Failed to assemble program: {err}");
+    // }
 
     match app.run(&mut event_loop) {
         Ok(_) => {}

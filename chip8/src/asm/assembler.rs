@@ -584,7 +584,6 @@ impl<'a> Assembler<'a> {
         }
 
         let mut count = 0;
-        let mut last_token: Option<Token> = None;
 
         while let Some(TK::Number) = self.stream.peek_kind() {
             let token = self.stream.consume(TK::Number)?;
@@ -593,7 +592,6 @@ impl<'a> Assembler<'a> {
                 panic!("only 8-bit literals are currently supported");
             }
             self.emit(nn.value as u8);
-            last_token = Some(nn.token);
             count += 1;
 
             // Discard optional newline so we can continue consuming data
