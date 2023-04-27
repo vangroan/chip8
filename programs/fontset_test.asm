@@ -42,7 +42,7 @@
 ; -------------------------------------------------
 ; clock counter
 .clock
-    LD  vb, 19  ; y := 20
+    LD  vb, 19  ; y := 19
     LD  vc, 0   ; char := 0
 
     CALL .clock_draw
