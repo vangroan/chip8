@@ -10,8 +10,9 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         c.bench_function("maze bytecode", |b| {
             b.iter(|| {
-                let _ = black_box(1000);
-                black_box(vm.execute())
+                let step_count = black_box(1000_usize);
+                // black_box(vm.execute())
+                black_box(vm.run_steps(step_count))
             })
         });
     }

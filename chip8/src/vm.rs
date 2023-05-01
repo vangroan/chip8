@@ -215,6 +215,7 @@ impl Chip8Vm {
         }
     }
 
+    #[inline]
     fn step(&mut self) -> Flow {
         let mut rng = thread_rng();
 
