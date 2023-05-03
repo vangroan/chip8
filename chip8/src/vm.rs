@@ -371,7 +371,7 @@ impl Chip8Vm {
                 0xB => {
                     trace_op!("0x{:04X}  JP    v0,  0x{nnn:03X}", self.cpu.pc);
 
-                    todo!("JP V0, addr")
+                    self.cpu.pc = nnn as usize + self.cpu.registers[0] as usize;
                 }
                 // CXNN (RND Vx, byte)
                 //
