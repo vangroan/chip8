@@ -623,6 +623,7 @@ impl Chip8Vm {
             // ExA1 (SKNP Vx)
             0xA1 => {
                 trace_op!("0x{:04X}  SKNP  v{vx:x}", self.cpu.pc);
+                debug_assert_eq!(op, 0xE);
 
                 if !self.cpu.key_state(self.cpu.registers[vx as usize & 0xF]) {
                     self.cpu.pc += 2;
@@ -635,6 +636,7 @@ impl Chip8Vm {
             // The value of DT is placed into Vx.
             0x07 => {
                 trace_op!("0x{:04X}  LD    v{vx:x},  DT", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 self.cpu.registers[vx as usize] = self.cpu.delay_timer;
             }
@@ -644,6 +646,7 @@ impl Chip8Vm {
             // All execution stops until a key is pressed, then the value of that key is stored in Vx.
             0x0A => {
                 trace_op!("0x{:04X}  LD    v{vx:x},  K", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 if let Some(k) = self.cpu.first_key() {
                     self.cpu.registers[vx as usize] = k;
@@ -661,6 +664,7 @@ impl Chip8Vm {
             // DT is set equal to the value of Vx.
             0x15 => {
                 trace_op!("0x{:04X}  LD    DT,  v{vx:x}", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 self.cpu.delay_timer = self.cpu.registers[vx as usize];
             }
@@ -670,6 +674,7 @@ impl Chip8Vm {
             // ST is set equal to the value of Vx.
             0x18 => {
                 trace_op!("0x{:04X}  LD    ST,  v{vx:x}", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 let vx = self.cpu.op_x();
                 self.cpu.sound_timer = self.cpu.registers[vx as usize];
@@ -681,6 +686,7 @@ impl Chip8Vm {
             // Add Vx to I
             0x1E => {
                 trace_op!("0x{:04X}  LD    I,  v{vx:x}", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 let addr = self.cpu.address;
                 let x = self.cpu.registers[vx as usize & 0xF] as u16;
@@ -691,6 +697,7 @@ impl Chip8Vm {
             // Set I = location of sprite for digit Vx.
             0x29 => {
                 trace_op!("0x{:04X}  LD    F,  v{vx:x}", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 let x = self.cpu.registers[vx as usize];
                 self.cpu.address = FONTSET_START + (x as u16) * FONTSET_HEIGHT as u16;
@@ -702,6 +709,7 @@ impl Chip8Vm {
             #[rustfmt::skip]
             0x33 => {
                 trace_op!("0x{:04X}  LD    BCD,  v{vx:x}", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 let addr = self.cpu.address as usize;
                 let x = self.cpu.registers[vx as usize];
@@ -714,6 +722,7 @@ impl Chip8Vm {
             // Store registers V0 through Vx in memory starting at location I.
             0x55 => {
                 trace_op!("0x{:04X}  LD    [I],  v{vx:x}", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 let addr = self.cpu.address as usize;
                 self.cpu.registers[0..=vx as usize]
@@ -728,6 +737,7 @@ impl Chip8Vm {
             // Read registers V0 through Vx from memory starting at location I.
             0x65 => {
                 trace_op!("0x{:04X}  LD    v{vx:x},  [I]", self.cpu.pc);
+                debug_assert_eq!(op, 0xF);
 
                 let addr = self.cpu.address as usize;
                 self.cpu.registers[0..=vx as usize]
