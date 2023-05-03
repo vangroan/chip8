@@ -40,6 +40,28 @@ impl Chip8Vm {
         &self.conf
     }
 
+    pub fn load_builtin_font(&mut self) -> Chip8Result<()> {
+        let conf = crate::asm::AsmConf {
+            // Fonts are 5 bytes high, and packed together for historical reasons.
+            pad_data: false,
+        };
+        let fontset = crate::asm::assemble_with(include_str!("fontset.asm"), conf)?;
+        self.load_font(&fontset)
+    }
+
+    pub fn load_font(&mut self, fontset: &[u8]) -> Chip8Result<()> {
+        if fontset.len() != FONTSET_DATA_LENGTH {
+            return Err(Chip8Error::Font(format!(
+                "fontset data must be {FONTSET_DATA_LENGTH} bytes, got {}",
+                fontset.len()
+            )));
+        }
+
+        self.cpu.ram[0..FONTSET_DATA_LENGTH].copy_from_slice(fontset);
+
+        Ok(())
+    }
+
     pub fn load_bytecode(&mut self, bytecode: &[u8]) -> Chip8Result<()> {
         if !check_program_size(bytecode) {
             return Err(Chip8Error::LargeProgram);
@@ -47,6 +69,9 @@ impl Chip8Vm {
 
         // Start with clean memory to avoid leaking previous program.
         self.cpu.clear_memory();
+
+        // Reset fonts
+        self.load_builtin_font()?;
 
         // Load program into virtual RAM
         self.cpu.ram[MEM_START..MEM_START + bytecode.len()].copy_from_slice(bytecode);
@@ -110,6 +135,14 @@ impl From<Hz> for Duration {
     }
 }
 
+macro_rules! trace_op {
+    ($($arg:tt)*) => {
+        if cfg!(feature="trace_opcodes") {
+            log::trace!($($arg)*);
+        }
+    };
+}
+
 /// Interpreter
 impl Chip8Vm {
     /// Sets the keyboard key input state.
@@ -155,6 +188,23 @@ impl Chip8Vm {
         Ok(Flow::Ok)
     }
 
+    pub fn run_steps(&mut self, step_count: usize) -> Chip8Result<Flow> {
+        self.reset();
+
+        for _ in 0..step_count {
+            match self.resume() {
+                Flow::Error => match self.cpu.error {
+                    Some(err) => return Err(Chip8Error::Runtime(err)),
+                    None => return Ok(Flow::Error),
+                },
+                Flow::Interrupt => break,
+                _ => {}
+            }
+        }
+
+        Ok(Flow::Ok)
+    }
+
     fn resume(&mut self) -> Flow {
         self.cpu.trap = false;
         self.cpu.error = None;
@@ -173,6 +223,7 @@ impl Chip8Vm {
         }
     }
 
+    #[inline]
     fn step(&mut self) -> Flow {
         let mut rng = thread_rng();
 
@@ -220,21 +271,21 @@ impl Chip8Vm {
             match code {
                 // Miscellaneous instructions identified by nn
                 0x0 | 0xE | 0xF => control_flow = self.exec_misc(op, vx, nn),
-                // 1NNN (JP addr)
+                // 1nnn (JP addr)
                 //
                 // Jump to address.
                 0x1 => {
-                    op_trace_nnn("JP", &self.cpu);
+                    trace_op!("0x{:04X}  JP    0x{nnn:03X}", self.cpu.pc);
 
                     self.cpu.pc = nnn as usize;
 
                     control_flow = Flow::Jump;
                 }
-                // 2NNN (CALL addr)
+                // 2nnn (CALL addr)
                 //
                 // Call subroutine at NNN.
                 0x2 => {
-                    op_trace_nnn("CALL", &self.cpu);
+                    trace_op!("0x{:04X}  CALL  0x{nnn:03X}", self.cpu.pc);
 
                     self.cpu.sp += 1;
                     self.cpu.stack[self.cpu.sp] = self.cpu.pc as u16;
@@ -242,81 +293,99 @@ impl Chip8Vm {
 
                     control_flow = Flow::Jump;
                 }
-                // 3XNN (SE Vx, byte)
+                // 3xnn (SE Vx, byte)
                 //
                 // Skip the next instruction if register VX equals value NN.
                 0x3 => {
-                    op_trace_xnn("SE", &self.cpu);
+                    trace_op!("0x{:04X}  SE    v{vx:x},  0x{nn:02X}", self.cpu.pc);
 
                     if self.cpu.registers[vx as usize] == nn {
                         self.cpu.pc += 2;
                     }
                 }
-                // 4XNN (SNE Vx, byte)
+                // 4xnn (SNE Vx, byte)
                 //
                 // Skip the next instruction if register VX does not equal value NN.
                 0x4 => {
-                    op_trace_xnn("SNE", &self.cpu);
+                    trace_op!("0x{:04X}  SNE   v{vx:x},  0x{nn:02X}", self.cpu.pc);
 
                     if self.cpu.registers[vx as usize] != nn {
                         self.cpu.pc += 2;
                     }
                 }
-                // 5XY0 (SE Vx, Vy)
+                // 5xy0 (SE Vx, Vy)
                 //
                 // Skip the next instruction if register VX equals value VY.
                 0x5 => {
-                    op_trace_xy("SE", &self.cpu);
+                    trace_op!("0x{:04X}  SE    v{vx:x},  v{vy:x}", self.cpu.pc);
 
-                    if self.cpu.registers[vx as usize] == self.cpu.registers[vy as usize] {
+                    let x = self.cpu.registers[vx as usize];
+                    let y = self.cpu.registers[vy as usize];
+                    if x == y {
                         self.cpu.pc += 2;
                     }
                 }
-                // 6XNN (LD Vx, byte)
+                // 6xnn (LD Vx, byte)
                 //
                 // Set register VX to value NN.
                 0x6 => {
-                    op_trace_xnn("LD", &self.cpu);
+                    trace_op!("0x{:04X}  LD    v{vx:x},  0x{nn:02X}", self.cpu.pc);
 
                     self.cpu.registers[vx as usize] = nn;
                 }
-                // 7XNN (ADD Vx, byte)
+                // 7xnn (ADD Vx, byte)
                 //
                 // Add value NN to register VX. Carry flag is not set.
                 0x7 => {
-                    op_trace_xnn("ADD", &self.cpu);
+                    trace_op!("0x{:04X}  ADD   v{vx:x},  0x{nn:02X}", self.cpu.pc);
 
-                    self.cpu.registers[vx as usize] += nn;
+                    let x = self.cpu.registers[vx as usize];
+                    self.cpu.registers[vx as usize] = x.wrapping_add(nn);
                 }
                 // Arithmetic instructions indentified by n
                 0x8 => control_flow = self.exec_math(op, vx, vy, n),
-                // 9XY0 (SNE Vx, Vy)
+                // 9xy0 (SNE Vx, Vy)
                 //
                 // Skip next instruction if Vx != Vy.
                 // The values of Vx and Vy are compared, and if they are not equal, the program counter is increased by 2.
-                0x9 => todo!("SNE Vx, Vy"),
-                // ANNN (LD I, addr)
+                0x9 => {
+                    trace_op!("0x{:04X}  SNE   v{vx:x},  v{vy:x}", self.cpu.pc);
+
+                    let x = self.cpu.registers[vx as usize];
+                    let y = self.cpu.registers[vy as usize];
+                    if x != y {
+                        self.cpu.pc += 2;
+                    }
+                }
+                // Annn (LD I, addr)
                 //
                 // Set address register I to value NNN.
                 0xA => {
-                    op_trace_nnn("LDI", &self.cpu);
+                    trace_op!("0x{:04X}  LD    I,   0x{nnn:03X}", self.cpu.pc);
 
                     self.cpu.address = nnn;
                 }
-                0xB => todo!("JP V0, addr"),
+                // Bnnn (JP V0, addr)
+                //
+                // Jump to location nnn + V0.
+                0xB => {
+                    trace_op!("0x{:04X}  JP    v0,  0x{nnn:03X}", self.cpu.pc);
+
+                    self.cpu.pc = nnn as usize + self.cpu.registers[0] as usize;
+                }
                 // CXNN (RND Vx, byte)
                 //
                 // Generate random number.
                 // Set register VX to the result of bitwise AND between a random number and NN.
                 0xC => {
-                    op_trace_xnn("RND", &self.cpu);
+                    trace_op!("0x{:04X}  RND   v{vx:x},  0x{nn:02X}", self.cpu.pc);
 
                     self.cpu.registers[vx as usize] = nn & rng.gen::<u8>();
                 }
-                // DXYN (DRW Vx, Vy, nibble)
+                // Dxyn (DRW Vx, Vy, nibble)
                 //
-                // Draw sprite to the display buffer, at coordinate as per registers VX and VY.
-                // Sprite is encoded as 8 pixels wide, N+1 pixels high, stored in bits located in
+                // Draw sprite to the display buffer, at coordinate as per registers Vx and Vy.
+                // Sprite is encoded as 8 pixels wide, N pixels high, stored in bits located in
                 // memory pointed to by address register I.
                 //
                 // If the sprite is drawn outside of the display area, it is wrapped around to the other side.
@@ -324,7 +393,7 @@ impl Chip8Vm {
                 // If the drawing operation erases existing pixels in the display buffer, register VF is set to
                 // 1, and set to 0 if no display bits are unset. This is used for collision detection.
                 0xD => {
-                    op_trace_xyn("DRAW", &self.cpu);
+                    trace_op!("0x{:04X}  DRAW  v{vx:x},  v{vy:x}", self.cpu.pc);
 
                     let (x, y) = (
                         self.cpu.registers[vx as usize] as usize,
@@ -333,29 +402,29 @@ impl Chip8Vm {
                     let mut is_erased = false;
 
                     // Iteration from pointer in address register I to number of rows specified by opcode value N.
-                    for (r, row) in self
-                        .cpu
+                    self.cpu
                         .ram
                         .iter()
                         .skip(self.cpu.address as usize)
                         .take(n as usize)
                         .enumerate()
-                    {
-                        // Each row is 8 bits representing the 8 pixels of the sprite.
-                        for c in 0..8 {
-                            let d = ((x + c) & DISPLAY_WIDTH_MASK)
-                                + ((y + r) & DISPLAY_HEIGHT_MASK) * DISPLAY_WIDTH;
+                        .for_each(|(r, row)| {
+                            // Each row is 8 bits representing the 8 pixels of the sprite.
+                            for c in 0..8 {
+                                let d = (((x + c) & DISPLAY_WIDTH_MASK)
+                                    + ((y + r) & DISPLAY_HEIGHT_MASK) * DISPLAY_WIDTH)
+                                    & (MEM_SIZE - 1);
 
-                            let old_px = self.cpu.display[d];
-                            let new_px = old_px ^ ((row >> (7 - c) & 0x1) == 1);
+                                let old_px = self.cpu.display[d];
+                                let new_px = (row >> (7 - c) & 1) != 0;
 
-                            // XOR erases a pixel when both the old and new values are both 1.
-                            is_erased |= old_px && new_px;
+                                // XOR erases a pixel when both the old and new values are both 1.
+                                is_erased |= old_px && new_px;
 
-                            // Write to display buffer
-                            self.cpu.display[d] = new_px;
-                        }
-                    }
+                                // Write to display buffer
+                                self.cpu.display[d] = old_px ^ new_px;
+                            }
+                        });
 
                     // If a pixel was erased, then a collision occurred.
                     self.cpu.registers[0xF] = is_erased as u8;
@@ -363,6 +432,7 @@ impl Chip8Vm {
                 }
                 // Unsupported operation.
                 _ => {
+                    trace_op!("0x{:04X}  UNKNOWN 0x{a:02X}{b:02X}", self.cpu.pc);
                     self.cpu.set_error("unsupported opcode");
                     control_flow = Flow::Error;
                 }
@@ -377,63 +447,66 @@ impl Chip8Vm {
     #[must_use]
     fn exec_math(&mut self, op: u8, vx: u8, vy: u8, n: u8) -> Flow {
         debug_assert_eq!(op, 0x8);
+        assert!((vx as usize) < self.cpu.registers.len());
+        assert!((vy as usize) < self.cpu.registers.len());
+
         let mut control_flow = Flow::Ok;
 
         match n {
-            // 8XY0 (LD Vx, Vy)
+            // 8xy0 (LD Vx, Vy)
             //
             // Store the value of register VY in register VX.
             0x0 => {
-                op_trace_xy_op("LD", &self.cpu);
+                trace_op!("0x{:04X}  LD    v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 self.cpu.registers[vx as usize] = self.cpu.registers[vy as usize];
             }
-            // 8XY1 (OR Vx, Vy)
+            // 8xy1 (OR Vx, Vy)
             //
             // Performs bitwise OR on VX and VY, and stores the result in VX.
             0x1 => {
-                op_trace_xy_op("OR", &self.cpu);
+                trace_op!("0x{:04X}  OR    v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 self.cpu.registers[vx as usize] |= self.cpu.registers[vy as usize];
             }
-            // 8XY2 (AND Vx, Vy)
+            // 8xy2 (AND Vx, Vy)
             //
             // Performs bitwise AND on VX and VY, and stores the result in VX.
             0x2 => {
-                op_trace_xy_op("AND", &self.cpu);
+                trace_op!("0x{:04X}  AND   v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 self.cpu.registers[vx as usize] &= self.cpu.registers[vy as usize];
             }
-            // 8XY3 (XOR Vx, Vy)
+            // 8xy3 (XOR Vx, Vy)
             //
             // Performs bitwise XOR on VX and VY, and stores the result in VX.
             0x3 => {
-                op_trace_xy_op("XOR", &self.cpu);
+                trace_op!("0x{:04X}  XOR   v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 self.cpu.registers[vx as usize] ^= self.cpu.registers[vy as usize];
             }
-            // 8XY4 (ADD Vx, Vy)
+            // 8xy4 (ADD Vx, Vy)
             //
             // ADDs VX to VY, and stores the result in VX.
             // Overflow is wrapped.
             // If overflow, set VF to 1, else 0.
             0x4 => {
-                op_trace_xy_op("ADD", &self.cpu);
+                trace_op!("0x{:04X}  ADD   v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 let (x, y) = (
                     self.cpu.registers[vx as usize],
                     self.cpu.registers[vy as usize],
                 );
                 let result = x as usize + y as usize;
-                self.cpu.registers[vx as usize] = (result & 0xF) as u8; // Overflow wrap
+                self.cpu.registers[vx as usize] = (result & 0xFF) as u8; // Overflow wrap
                 self.cpu.registers[0xF] = if result > 0x255 { 1 } else { 0 };
             }
-            // 8XY5 (SUB Vx, Vy)
+            // 8xy5 (SUB Vx, Vy)
             //
             // Subtracts VY from VX, and stores the result in VX.
             // VF is set to 0 when there is a borrow, set to 1 when there isn't.
             0x5 => {
-                op_trace_xy_op("SUB", &self.cpu);
+                trace_op!("0x{:04X}  SUB   v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 let (x, y) = (
                     self.cpu.registers[vx as usize],
@@ -443,24 +516,24 @@ impl Chip8Vm {
                 self.cpu.registers[vx as usize] = (result & 0xF) as u8; // Overflow wrap
                 self.cpu.registers[0xF] = if y > x { 0 } else { 1 };
             }
-            // 8XY6 (SHR Vx)
+            // 8xy6 (SHR Vx)
             //
             // If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0.
             // Shift VX right by 1.
             // VY is unused.
             0x6 => {
-                op_trace_xy_op("SHR", &self.cpu);
+                trace_op!("0x{:04X}  SHR   v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 let x = self.cpu.registers[vx as usize];
                 self.cpu.registers[0xF] = x & 1;
                 self.cpu.registers[vx as usize] = x >> 1;
             }
-            // 8XY7 (SUBN Vx, Vy)
+            // 8xy7 (SUBN Vx, Vy)
             //
             // Subtracts VX from VY, and stores the result in VX.
             // VF is set to 0 when there is a borrow, set to 1 when there isn't.
             0x7 => {
-                op_trace_xy_op("SUBN", &self.cpu);
+                trace_op!("0x{:04X}  SUBN  v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 let (x, y) = (
                     self.cpu.registers[vx as usize],
@@ -470,21 +543,25 @@ impl Chip8Vm {
                 self.cpu.registers[vx as usize] = (result & 0xF) as u8; // Overflow wrap
                 self.cpu.registers[0xF] = if x > y { 0 } else { 1 };
             }
-            // 8XYE (SHL Vx)
+            // 8xyE (SHL Vx)
             //
-            // Shift VX left by 1.
             // If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0.
+            // Shift VX left by 1.
             // VY is unused.
             0xE => {
-                op_trace_xy_op("SHL", &self.cpu);
+                trace_op!("0x{:04X}  SHL   v{vx:x},  v{vy:x}", self.cpu.pc);
 
                 let x = self.cpu.registers[vx as usize];
-                self.cpu.registers[0xF] = x & 1;
+                self.cpu.registers[0xF] = (x >> 7) & 1;
                 self.cpu.registers[vx as usize] = x << 1;
             }
             // ----------------------------------------------------------------
             // Unsupported operation.
             _ => {
+                trace_op!(
+                    "0x{:04X}  UNKNOWN MATH 0x{op:X} v{vx:x}, v{vy:x}, 0x{n:X}",
+                    self.cpu.pc
+                );
                 self.cpu.set_error("unsupported math opcode");
                 control_flow = Flow::Error;
             }
@@ -497,6 +574,8 @@ impl Chip8Vm {
     #[inline]
     #[must_use]
     fn exec_misc(&mut self, op: u8, vx: u8, nn: u8) -> Flow {
+        assert!((vx as usize) < self.cpu.registers.len());
+
         let mut control_flow = Flow::Ok;
 
         match nn {
@@ -506,7 +585,7 @@ impl Chip8Vm {
             //
             // Clear display
             0xE0 => {
-                op_trace("CLS", &self.cpu);
+                trace_op!("0x{:04X}  CLS", self.cpu.pc);
                 debug_assert_eq!(op, 0x0);
 
                 self.cpu.clear_display();
@@ -517,36 +596,46 @@ impl Chip8Vm {
             // Set the program counter to the value at the top of the stack.
             // Subtract 1 from the stack pointer.
             0xEE => {
-                op_trace("RET", &self.cpu);
+                trace_op!("0x{:04X}  RET", self.cpu.pc);
                 debug_assert_eq!(op, 0x0);
 
                 self.cpu.pc = self.cpu.stack[self.cpu.sp] as usize;
-                self.cpu.sp -= 1;
+                let (sp, underflow) = self.cpu.sp.overflowing_sub(1);
 
-                control_flow = Flow::Jump;
+                if underflow {
+                    self.cpu.set_error("call stack underflow");
+                    control_flow = Flow::Error;
+                } else {
+                    self.cpu.sp = sp;
+                    control_flow = Flow::Jump;
+                }
             }
             // ----------------------------------------------------------------
             // Ex9E (SKP Vx)
             0x9E => {
-                op_trace("SKP", &self.cpu);
+                trace_op!("0x{:04X}  SKP   v{vx:x}", self.cpu.pc);
                 debug_assert_eq!(op, 0xE);
 
-                let vx = self.cpu.op_x();
                 if self.cpu.key_state(self.cpu.registers[vx as usize & 0xF]) {
                     self.cpu.pc += 2;
                 }
             }
-            0xA1 => todo!("SKNP Vx"),
+            // ExA1 (SKNP Vx)
+            0xA1 => {
+                trace_op!("0x{:04X}  SKNP  v{vx:x}", self.cpu.pc);
+
+                if !self.cpu.key_state(self.cpu.registers[vx as usize & 0xF]) {
+                    self.cpu.pc += 2;
+                }
+            }
             // ----------------------------------------------------------------
             // Fx07 (LD Vx, DT)
             //
             // Set Vx = delay timer value.
             // The value of DT is placed into Vx.
             0x07 => {
-                op_trace_xk("LD", &self.cpu, "DT");
-                debug_assert_eq!(op, 0xF);
+                trace_op!("0x{:04X}  LD    v{vx:x},  DT", self.cpu.pc);
 
-                let vx = self.cpu.op_x();
                 self.cpu.registers[vx as usize] = self.cpu.delay_timer;
             }
             // Fx0A (LD Vx, K)
@@ -554,7 +643,7 @@ impl Chip8Vm {
             // Wait for a key press, store the value of the key in Vx.
             // All execution stops until a key is pressed, then the value of that key is stored in Vx.
             0x0A => {
-                op_trace_xk("LD", &self.cpu, "K");
+                trace_op!("0x{:04X}  LD    v{vx:x},  K", self.cpu.pc);
 
                 if let Some(k) = self.cpu.first_key() {
                     self.cpu.registers[vx as usize] = k;
@@ -571,10 +660,8 @@ impl Chip8Vm {
             // Set delay timer = Vx.
             // DT is set equal to the value of Vx.
             0x15 => {
-                op_trace_kx("LD", &self.cpu, "DT");
-                debug_assert_eq!(op, 0xF);
+                trace_op!("0x{:04X}  LD    DT,  v{vx:x}", self.cpu.pc);
 
-                let vx = self.cpu.op_x();
                 self.cpu.delay_timer = self.cpu.registers[vx as usize];
             }
             // Fx18 (LD ST, Vx)
@@ -582,22 +669,81 @@ impl Chip8Vm {
             // Set sound timer = Vx.
             // ST is set equal to the value of Vx.
             0x18 => {
-                op_trace_kx("LD", &self.cpu, "ST");
-                debug_assert_eq!(op, 0xF);
+                trace_op!("0x{:04X}  LD    ST,  v{vx:x}", self.cpu.pc);
 
                 let vx = self.cpu.op_x();
                 self.cpu.sound_timer = self.cpu.registers[vx as usize];
                 self.cpu.buzzer_state = self.cpu.sound_timer > 0;
                 control_flow = Flow::Sound;
             }
-            0x1E => todo!("ADD I, Vx"),
-            0x29 => todo!("LD F, Vx"),
-            0x33 => todo!("LD B, Vx"),
-            0x55 => todo!("LD [I], Vx"),
-            0x65 => todo!("LD Vx, [I]"),
+            // Fx1E (ADD I, Vx)
+            //
+            // Add Vx to I
+            0x1E => {
+                trace_op!("0x{:04X}  LD    I,  v{vx:x}", self.cpu.pc);
+
+                let addr = self.cpu.address;
+                let x = self.cpu.registers[vx as usize & 0xF] as u16;
+                self.cpu.address = addr.wrapping_add(x);
+            }
+            // Fx29 (LD F, Vx)
+            //
+            // Set I = location of sprite for digit Vx.
+            0x29 => {
+                trace_op!("0x{:04X}  LD    F,  v{vx:x}", self.cpu.pc);
+
+                let x = self.cpu.registers[vx as usize];
+                self.cpu.address = FONTSET_START + (x as u16) * FONTSET_HEIGHT as u16;
+            }
+            // Fx33 (LD B, Vx)
+            //
+            // Store the binary-coded decimal representation of Vx
+            // in the memory locations I, I+1, and I+2.
+            #[rustfmt::skip]
+            0x33 => {
+                trace_op!("0x{:04X}  LD    BCD,  v{vx:x}", self.cpu.pc);
+
+                let addr = self.cpu.address as usize;
+                let x = self.cpu.registers[vx as usize];
+                self.cpu.ram[addr + 2] = x       % 10;
+                self.cpu.ram[addr + 1] = x / 10  % 10;
+                self.cpu.ram[addr]     = x / 100 % 10;
+            }
+            // Fx55 (LD [I], Vx)
+            //
+            // Store registers V0 through Vx in memory starting at location I.
+            0x55 => {
+                trace_op!("0x{:04X}  LD    [I],  v{vx:x}", self.cpu.pc);
+
+                let addr = self.cpu.address as usize;
+                self.cpu.registers[0..=vx as usize]
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(v, x)| {
+                        self.cpu.ram[addr + v] = *x;
+                    });
+            }
+            // Fx65 (LD Vx, [I])
+            //
+            // Read registers V0 through Vx from memory starting at location I.
+            0x65 => {
+                trace_op!("0x{:04X}  LD    v{vx:x},  [I]", self.cpu.pc);
+
+                let addr = self.cpu.address as usize;
+                self.cpu.registers[0..=vx as usize]
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(v, x)| {
+                        *x = self.cpu.ram[addr + v];
+                    });
+            }
             // ----------------------------------------------------------------
             // Unsupported operation.
             _ => {
+                trace_op!(
+                    "0x{:04X}  UNKNOWN MISC 0x{op:X} v{vx:x}, 0x{nn:02X}",
+                    self.cpu.pc
+                );
                 self.cpu.set_error("unsupported misc opcode");
                 control_flow = Flow::Error;
             }
@@ -663,100 +809,6 @@ impl Chip8Vm {
     }
 }
 
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace(name: &str, cpu: &Chip8Cpu) {
-    println!("{:04X}: {:4}", cpu.pc, name);
-}
-
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace_nnn(name: &str, cpu: &Chip8Cpu) {
-    let nnn = cpu.op_nnn();
-    println!("{:04X}: {:4} {:03X}", cpu.pc, name, nnn);
-}
-
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace_xnn(name: &str, cpu: &Chip8Cpu) {
-    let (vx, nn) = cpu.op_xnn();
-    println!("{:04X}: {:4} V{:02X} {:02X}", cpu.pc, name, vx, nn);
-}
-
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace_xyn(name: &str, cpu: &Chip8Cpu) {
-    let (vx, vy, n) = cpu.op_xyn();
-    println!(
-        "{:04X}: {:4} V{:02X} V{:02X} {:01X}",
-        cpu.pc, name, vx, vy, n
-    );
-}
-
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace_xy(name: &str, cpu: &Chip8Cpu) {
-    let (vx, vy) = cpu.op_xy();
-    println!("{:04X}: {:4} V{:02X} V{:02X}", cpu.pc, name, vx, vy);
-}
-
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace_xk(name: &str, cpu: &Chip8Cpu, k: &str) {
-    let vx = cpu.op_x();
-    println!("{:04X}: {:4} V{:02X} {}", cpu.pc, name, vx, k);
-}
-
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace_kx(name: &str, cpu: &Chip8Cpu, k: &str) {
-    let vx = cpu.op_x();
-    println!("{:04X}: {:4} {} V{:02X}", cpu.pc, name, k, vx);
-}
-
-#[cfg(feature = "op_trace")]
-#[inline]
-fn op_trace_xy_op(name: &str, cpu: &Chip8Cpu) {
-    let (vx, vy) = cpu.op_xy();
-    let op2 = cpu.op_n();
-    println!(
-        "{:04X}: {:4} V{:02X} V{:02X} {:02X}",
-        cpu.pc, name, vx, vy, op2
-    );
-}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace(_: &str, _: &Chip8Cpu) {}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace_nnn(_: &str, _: &Chip8Cpu) {}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace_xnn(_: &str, _: &Chip8Cpu) {}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace_xyn(_: &str, _: &Chip8Cpu) {}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace_xy(_: &str, _: &Chip8Cpu) {}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace_xk(_: &str, _: &Chip8Cpu, _: &str) {}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace_kx(_: &str, _: &Chip8Cpu, _: &str) {}
-
-#[cfg(not(feature = "op_trace"))]
-#[inline]
-fn op_trace_xy_op(_: &str, _: &Chip8Cpu) {}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -808,5 +860,52 @@ mod test {
         assert_eq!(vm.cpu.pc, MEM_START + 4);
         // assert!(!vm.cpu.key_state(0x05), "keyboard state was not cleared");
         assert_eq!(vm.cpu.registers[2], 0x42); // sentinal
+    }
+
+    /// Booleans must be cast to u8 1 or 0
+    #[test]
+    fn test_assert_bool_cast() {
+        assert_eq!(true as u8, 1);
+        assert_eq!(false as u8, 0);
+    }
+
+    #[test]
+    fn test_draw_collision() {
+        let mut vm = Chip8Vm::new(Chip8Conf::default());
+
+        // Draw two pixels next to each other.
+        // The zero bits of the second draw must not erase
+        // the pixels of the first draw
+        //
+        // draw sprite 1
+        // ____####, vf == 0
+        //
+        // draw sprite 2
+        // ########, vf == 0
+        let program = concat!(
+            "LD I, .sprite \n",
+            "LD v0, 4 \n", // x := 4
+            "LD v1, 0 \n", // y := 0
+            // draw sprite 1
+            "DRW v0, v1, 1 \n",
+            // draw sprite 2
+            "LD v0, 0 \n", // x := 0
+            "DRW v0, v1, 1 \n",
+            // ---
+            ".sprite \n",
+            "0b11110000 \n",
+            "0b00000000 \n"
+        );
+        let rom = crate::assemble(program);
+        if let Err(ref err) = rom {
+            eprintln!("asm error: {err}");
+        }
+        vm.load_bytecode(&rom.unwrap()).unwrap();
+
+        vm.run_steps(5).unwrap();
+
+        assert_eq!(vm.display_buffer()[0], false); // sprite 1
+        assert_eq!(vm.display_buffer()[4], true); // sprite 2
+        assert_eq!(vm.cpu.registers[0xF], 0);
     }
 }

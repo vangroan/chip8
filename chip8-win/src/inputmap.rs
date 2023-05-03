@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::iter::Iterator;
 
-use chip8::KeyCode;
+use chip8::{Chip8Vm, KeyCode};
 use serde::Deserialize;
 use smol_str::SmolStr;
 use winit::event::{ElementState, VirtualKeyCode};
@@ -93,12 +93,16 @@ pub enum KeyState {
 }
 
 impl KeyState {
-    pub fn is_down(&self) -> bool {
-        matches!(self, Self::Pressed | Self::Down)
-    }
-
     pub fn is_pressed(&self) -> bool {
         *self == Self::Pressed
+    }
+
+    pub fn is_released(&self) -> bool {
+        *self == Self::Released
+    }
+
+    pub fn is_down(&self) -> bool {
+        matches!(self, Self::Pressed | Self::Down)
     }
 }
 
@@ -239,6 +243,12 @@ impl InputMap {
             .unwrap_or(false)
     }
 
+    pub fn is_action_released(&self, action: impl AsRef<str>) -> bool {
+        self.action_state(action)
+            .map(|state| state.key_state.is_released())
+            .unwrap_or(false)
+    }
+
     pub fn action_state(&self, action: impl AsRef<str>) -> Option<&InputState> {
         let query = action.as_ref().trim();
         self.state
@@ -248,7 +258,6 @@ impl InputMap {
                 InputKind::Action(ref name) => name == query,
                 _ => false,
             })
-            .map(|state| state)
     }
 
     /// Remove all queued events.
@@ -268,6 +277,14 @@ impl InputMap {
             .iter()
             .filter(|ev| ev.key_state.is_down())
             .filter_map(|ev| ev.kind.as_chip8())
+    }
+
+    // Write keyboard input into Chip8 VM.
+    pub fn write_keys(&mut self, vm: &mut Chip8Vm) {
+        vm.clear_keys();
+        for keycode in self.iter_chip8() {
+            vm.set_key(keycode, true);
+        }
     }
 }
 
