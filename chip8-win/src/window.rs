@@ -110,7 +110,7 @@ impl WindowContext {
         }
 
         // On Android, the window is not available when the OpenGL display has to be created.
-        // However on Windows the main window must first exist before OpenGL can be initialized.
+        // However, on Windows the main window must first exist before OpenGL can be initialized.
         let window = window.unwrap_or_else(|| {
             log::info!("creating window with finalize_window");
             glutin_winit::finalize_window(event_loop, window_builder.clone(), &gl_config)

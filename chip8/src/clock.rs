@@ -16,7 +16,7 @@ pub(crate) struct Clock {
     /// Expected duration of one clock cycle, in nanoseconds.
     /// Stored as integer to avoid calculating nanos on each frame.
     interval: u128,
-    /// Last time measuement
+    /// Last time measurement.
     last: Instant,
 }
 
@@ -46,7 +46,7 @@ impl Clock {
     pub(crate) fn wait(&mut self) {
         loop {
             let elapsed = self.last.elapsed().as_nanos();
-            // if elapsed < self.interval {
+
             if elapsed < self.interval {
                 // Sleep does not have enough resolution, and causes
                 // the clock to run at 30 FPS.

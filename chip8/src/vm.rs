@@ -148,7 +148,7 @@ impl Chip8Vm {
     /// Sets the keyboard key input state.
     ///
     /// If the VM is waiting for keyboard input, the `key_wait` flag will
-    /// be cleared so it can be resumed.
+    /// be cleared, so it can be resumed.
     pub fn set_key(&mut self, key: KeyCode, pressed: bool) {
         self.cpu.set_key_state(key as u8, pressed);
         self.cpu.key_wait = false;
@@ -388,7 +388,7 @@ impl Chip8Vm {
                 // Sprite is encoded as 8 pixels wide, N pixels high, stored in bits located in
                 // memory pointed to by address register I.
                 //
-                // If the sprite is drawn outside of the display area, it is wrapped around to the other side.
+                // If the sprite is drawn outside the display area, it is wrapped around to the other side.
                 //
                 // If the drawing operation erases existing pixels in the display buffer, register VF is set to
                 // 1, and set to 0 if no display bits are unset. This is used for collision detection.
@@ -832,14 +832,14 @@ mod test {
     /// Fx0A (LD Vx, K)
     ///
     /// Wait for a keypress, then store the key value in Vx.
-    /// The VM must stall while waiting, and signal the state to the outer executer.
+    /// The VM must stall while waiting, and signal the state to the outer executor.
     #[test]
     #[rustfmt::skip]
     fn test_key_wait() {
         let mut vm = Chip8Vm::new(Chip8Conf::default());
         vm.load_bytecode(&[
             0xF1, 0x0A, // LD v1, K
-            0x62, 0x42  // LD v2, 0x42  ; sentinal
+            0x62, 0x42  // LD v2, 0x42  ; sentinel
         ]).unwrap();
 
         // machine must stall

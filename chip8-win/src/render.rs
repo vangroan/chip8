@@ -145,8 +145,9 @@ impl Render {
                 glow::RENDERBUFFER,
                 Some(rbo),
             );
-            assert!(
-                gl.check_framebuffer_status(glow::FRAMEBUFFER) == glow::FRAMEBUFFER_COMPLETE,
+            assert_eq!(
+                gl.check_framebuffer_status(glow::FRAMEBUFFER),
+                glow::FRAMEBUFFER_COMPLETE,
                 "framebuffer is not complete"
             );
             gl_error!(gl);

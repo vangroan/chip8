@@ -21,6 +21,7 @@ harness = false
 [features]
 default = ["serde"]
 
+# Enable for the VM to log interpreted instructions as level `trace`
 trace_opcodes = []
 
 # Turn off the CPU clock and run the interpreter as quickly as possible.

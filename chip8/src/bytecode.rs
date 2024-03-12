@@ -6,16 +6,28 @@ use crate::constants::*;
 #[rustfmt::skip]
 pub mod opcodes {
     /// 00E0 (CLS)
+    ///
+    /// Clear the screen.
     pub const CLS: u8        = 0xE0;
     /// 00EE (RET)
+    ///
+    /// Return from the sub-routine.
     pub const RET: u8        = 0xEE;
     /// 1nnn (JP addr)
+    ///
+    /// Jump to the address in `nnn`.
     pub const JP_ADDR: u8    = 0x1;
     /// 2nnn (CALL addr)
+    ///
+    /// Call the sub-routine at address `nnn`.
     pub const CALL_ADDR: u8  = 0x2;
     /// 3xnn (SE Vx, byte)
+    ///
+    /// Skip the next instruction if register `Vx` equals value `nn`
     pub const SE_VX_NN: u8   = 0x3;
     /// 4xnn (SNE Vx, byte)
+    ///
+    /// Skip the next instruction if register `Vx` does not equal value `nn`.
     pub const SNE_VX_NN: u8  = 0x4;
     /// 5xy0 (SE Vx, Vy)
     pub const SE_VX_VY: u8   = 0x5;
@@ -106,7 +118,7 @@ pub fn op_xnn(bytecode: &[u8], cursor: usize) -> (u8, u8) {
     ((bytecode[cursor] & 0b1111), bytecode[cursor + 1])
 }
 
-/// Extract operands VX and NN from the buffer at the cursor.
+/// Extract operands VX, VY and N from the buffer at the cursor.
 #[inline(always)]
 pub fn op_xyn(bytecode: &[u8], cursor: usize) -> (u8, u8, u8) {
     // Opcode is in upper nibble and needs to be masked out.
@@ -130,7 +142,7 @@ pub fn op_xy(bytecode: &[u8], cursor: usize) -> (u8, u8) {
     (x, y)
 }
 
-/// Extract operands VX, VY and N from the buffer at the cursor.
+/// Extract operand VX from the buffer at the cursor.
 #[inline(always)]
 pub fn op_x(bytecode: &[u8], cursor: usize) -> u8 {
     // Opcode is in upper nibble and needs to be masked out.
@@ -144,22 +156,25 @@ pub fn op_n(bytecode: &[u8], cursor: usize) -> u8 {
     data & 0b1111
 }
 
-// Encode a a bare instruction, which has no arguments.
+/// Encode a bare instruction, which has no arguments.
 pub fn encode_bare(opcode: u8) -> [u8; 2] {
     trace!("encode 0x{:03X}", opcode);
     [0, opcode]
 }
 
+/// Encode an instruction with arguments VX and NN.
 pub fn encode_xnn(opcode: u8, vx: u8, nn: u8) -> [u8; 2] {
     trace!("encode {:02X} {:02X}, {:02X}", opcode, vx, nn);
     [(opcode << 4) | (vx & 0xF), nn]
 }
 
+/// Encode an instruction with arguments VX, VY and NN.
 pub fn encode_xyn(opcode: u8, vx: u8, vy: u8, n: u8) -> [u8; 2] {
     trace!("encode {:02X} {:02X}, {:02X}, {:02X}", opcode, vx, vy, n);
     [(opcode << 4) | (vx & 0xF), (vy << 4) | (n & 0xF)]
 }
 
+/// Encode an instruction with argument NNN.
 pub fn encode_nnn(opcode: u8, nnn: u16) -> [u8; 2] {
     trace!("encode {:02X} 0x{:03X}", opcode, nnn);
     let part1 = ((nnn & 0b1111_0000_0000) >> 8) as u8;
