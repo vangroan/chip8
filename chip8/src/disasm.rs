@@ -1,4 +1,9 @@
 //! Disassembler.
+mod disasm2;
+mod ir;
+
+pub use disasm2::DisassemblerV2;
+
 use std::fmt::{self, Write as FmtWrite};
 
 use crate::{bytecode::*, constants::*};

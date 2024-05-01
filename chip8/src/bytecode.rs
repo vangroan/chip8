@@ -30,10 +30,14 @@ pub mod opcodes {
     /// Skip the next instruction if register `Vx` does not equal value `nn`.
     pub const SNE_VX_NN: u8  = 0x4;
     /// 5xy0 (SE Vx, Vy)
+    ///
+    /// Skip the next instruction if register `Vx` does not equal register `Vy`.
     pub const SE_VX_VY: u8   = 0x5;
     /// 6xnn (LD Vx, byte)
     pub const LD_VX_NN: u8   = 0x6;
     /// 7xnn (ADD Vx, byte)
+    ///
+    /// Add byte to the value in register `Vx`, store the result in `Vx`.
     pub const ADD_VX_NN: u8  = 0x7;
     /// 8xy0 (LD Vx, byte)
     pub const LD_VX_VY: [u8; 2]    = [0x8, 0x0];

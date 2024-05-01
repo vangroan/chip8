@@ -23,7 +23,7 @@ pub const IMPL_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod prelude {
     pub use super::{
         cpu::Chip8Cpu,
-        disasm::Disassembler,
+        disasm::{Disassembler, DisassemblerV2},
         error::{Chip8Error, Chip8Result},
         vm::{Chip8Conf, Chip8Vm},
     };
