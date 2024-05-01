@@ -2,9 +2,12 @@
 //!
 //! This is a structured representation of a program's bytecode.
 //! It models control flow and explicitly separates code and data.
-use crate::constants::Address;
 use std::fmt;
 use std::fmt::Formatter;
+
+use smol_str::SmolStr;
+
+use crate::constants::Address;
 
 pub struct Instr {
     /// Index in the buffer where the instruction was read from.
@@ -29,6 +32,55 @@ impl Instr {
     }
 }
 
+/// Address and optional label pair.
+pub struct LabelAddr {
+    pub address: Address,
+    pub label: Option<SmolStr>,
+}
+
+impl LabelAddr {
+    pub fn new(address: Address) -> Self {
+        Self {
+            address,
+            label: None,
+        }
+    }
+}
+
+impl fmt::Display for LabelAddr {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let Self {
+            address,
+            label: maybe_label,
+        } = self;
+
+        match maybe_label {
+            // No explicit label, print address in hex.
+            None => write!(f, "0x{address:03X}"),
+            // User friendly label.
+            Some(label) => write!(f, ".{label}"),
+        }
+    }
+}
+
+impl fmt::Debug for LabelAddr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let Self {
+            address,
+            label: maybe_label,
+        } = self;
+        let mut debug = f.debug_struct("LabelAddr");
+        let debug = debug.field("address", &address);
+
+        match maybe_label {
+            // No explicit label, print address in hex.
+            None => debug.finish_non_exhaustive(),
+            // User friendly label.
+            Some(label) => debug.field("label", &label).finish(),
+        }
+    }
+}
+
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Op {
@@ -50,7 +102,7 @@ pub enum Op {
     ///
     /// Jump to the address in `nnn`.
     JumpAddress {
-        address: Address,
+        address: LabelAddr,
     },
     /// 2nnn (CALL addr)
     ///
@@ -166,13 +218,13 @@ pub enum Op {
     ///
     /// Load address into register `I`.
     Load_Address {
-        address: u16,
+        address: Address,
     },
     // Bnnn (JP V0, addr)
     //
     // Jump to location nnn + V0.
     Jump_Vx {
-        address: u16,
+        address: Address,
     },
     /// Cxnn (RND Vx, byte)
     ///
@@ -230,7 +282,7 @@ impl<'a> fmt::Display for InstrRepr<'a> {
             Op::ClearScreen => write!(f, "CLS"),
             Op::Return => write!(f, "RET"),
             // TODO: Replace with label
-            Op::JumpAddress { address } => write!(f, "JP 0x{address:03X}"),
+            Op::JumpAddress { address } => write!(f, "JP {address}"),
             // TODO: Replace with label
             Op::Call { address } => write!(f, "CALL 0x{address:03X}"),
             Op::Skip_Eq_Byte { vx, nn } => write!(f, "SE v{vx}, {nn}"),

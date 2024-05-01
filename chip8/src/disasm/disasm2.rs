@@ -3,10 +3,11 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Write as FmtWrite};
 use std::iter::Enumerate;
 
-use crate::bytecode::{op_code, opcodes};
+use smol_str::SmolStr;
+
 use crate::constants::{Address, MEM_SIZE, MEM_START};
 
-use super::ir::{Instr, Op};
+use super::ir::{Instr, LabelAddr, Op};
 
 pub struct DisassemblerV2<'a> {
     /// Original bytecode input.
@@ -27,8 +28,8 @@ pub struct DisassemblerV2<'a> {
     /// Monotonically increasing subroutine counter.
     subroutine_id: usize,
     instructions: Vec<Instr>,
-    /// Mapping of bytecode indices to labels.
-    labels: HashMap<usize, ()>,
+    /// Mapping of target jump addresses indices to labels.
+    labels: HashMap<Address, SmolStr>,
     /// Bytecode indices that are candidates for data blocks.
     data_blocks: HashSet<usize>,
     errors: (),
@@ -87,6 +88,10 @@ impl<'a> DisassemblerV2<'a> {
             // TODO: Label jump destinations
             // TODO: Mark data blocks
             match instr.op {
+                Op::JumpAddress { ref mut address } => {
+                    let label = self.get_label(address.address);
+                    address.label = Some(label.into());
+                }
                 Op::Load_Address { address } => {
                     self.data_blocks.insert((address as usize) - MEM_START);
                 }
@@ -105,6 +110,9 @@ impl<'a> DisassemblerV2<'a> {
 
         // Format instructions
         for instr in &self.instructions {
+            if let Some(label) = self.labels.get(&instr.addr) {
+                writeln!(w, "       .{label}")?;
+            }
             writeln!(
                 w,
                 "0x{:04X} {:04X} {} {:?}",
@@ -128,6 +136,14 @@ impl<'a> DisassemblerV2<'a> {
 
     fn bump(&mut self) {
         self.cursor += 2;
+    }
+
+    fn get_label(&mut self, address: Address) -> &str {
+        self.labels.entry(address).or_insert_with(|| {
+            let label = SmolStr::new(format!("block-{}", self.block_id));
+            self.block_id += 1;
+            label
+        })
     }
 }
 
@@ -173,7 +189,9 @@ impl<I> Decoder<I> {
             // 1nnn (JP addr)
             //
             // Jump to address.
-            0x1 => Op::JumpAddress { address: nnn },
+            0x1 => Op::JumpAddress {
+                address: LabelAddr::new(nnn),
+            },
             // 2nnn (CALL addr)
             //
             // Call subroutine at NNN.
